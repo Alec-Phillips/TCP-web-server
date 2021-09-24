@@ -23,7 +23,7 @@ int POST() {
 }
 
 
-int processRequest(char *request, int client_socket) {
+int processRequest(char *request) {
     // figure some way of determining what the client is requesting:
     
         // parse the request (determine GET or POST)
