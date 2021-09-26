@@ -10,7 +10,7 @@ void launch(struct Server *server) {
     int address_len = sizeof(server->address);
     int new_socket;
     while(1) {
-        // printf("Waiting for new connections...\n");
+        printf("Waiting for new connections...\n");
         new_socket = accept(server->socket, (struct sockaddr *) &server->address, (socklen_t *) address_len);
         read(new_socket, buffer, 30000);
         printf("%s\n", buffer);
