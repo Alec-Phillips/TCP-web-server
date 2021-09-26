@@ -1,5 +1,6 @@
 /*
 	C socket server example
+	https://www.binarytides.com/server-client-example-c-sockets-linux/
 */
 
 #include<stdio.h>

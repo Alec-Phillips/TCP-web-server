@@ -1,5 +1,6 @@
 /*
 	C ECHO client example using sockets
+	https://www.binarytides.com/server-client-example-c-sockets-linux/
 */
 #include <stdio.h>	//printf
 #include <string.h>	//strlen
