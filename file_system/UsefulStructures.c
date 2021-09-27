@@ -3,13 +3,26 @@
 #include "UsefulStructures.h"
 
 
-Node* createNode() {
-    Node *newNode = malloc(sizeof(Node));
+FileNode* createFileNode() {
+    FileNode *newNode = malloc(sizeof(FileNode));
     newNode->next = NULL;
     return newNode;
 }
 
-void addNode(Node *head, Node *newNode) {
+void addFileNode(FileNode *head, FileNode *newNode) {
+    while (head->next != NULL) {
+        head = head->next;
+    }
+    head->next = newNode;
+}
+
+DirNode* createDirNode() {
+    DirNode *newNode = malloc(sizeof(DirNode));
+    newNode->next = NULL;
+    return newNode;
+}
+
+void addDirNode(DirNode *head, DirNode *newNode) {
     while (head->next != NULL) {
         head = head->next;
     }

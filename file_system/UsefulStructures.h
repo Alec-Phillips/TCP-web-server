@@ -1,20 +1,28 @@
 
 
 
-typedef struct Node {
+typedef struct FileNode {
     /*  the Node structure will point to either a File or Directory
         (hence the void ptr)
         implements a simple linked list node, basically
     */
-    void *data;
-    Node *next;
-} Node;
+    File *data;
+    FileNode *next;
+} FileNode;
 
+typedef struct DirNode {
+    /*  the Node structure will point to either a File or Directory
+        (hence the void ptr)
+        implements a simple linked list node, basically
+    */
+    Directory *data;
+    DirNode *next;
+} DirNode;
 
 typedef struct Directory {
     char *name;                 // the name of this directory
-    Node *files;                // pts to list of files in this directory
-    Node *childDirs;            // pts to list of child directories
+    FileNode *files;                // pts to list of files in this directory
+    DirNode *childDirs;            // pts to list of child directories
     Directory *parentDir;       // pts to its parent directory
     int numFiles;
     int numChildDirs;
@@ -28,5 +36,8 @@ typedef struct File {
 
 
 
-Node* createNode();
-void addNode(Node *head, Node *newNode);
+FileNode* createFileNode();
+void addFileNode(FileNode *head, FileNode *newNode);
+
+DirNode* createDirNode();
+void addDirNode(DirNode *head, DirNode *newNode);
