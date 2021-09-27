@@ -19,7 +19,7 @@ int main(int argc , char *argv[])
 	struct sockaddr_in server , client;
 	char client_message[3000];
 	int server_backlog = 10;
-	int server_port = 20;
+	int server_port = 10;
 	
 	//Create socket
 	server_socket = socket(AF_INET , SOCK_STREAM , 0);
@@ -49,7 +49,7 @@ int main(int argc , char *argv[])
 
 	printf("Listening on port: %d\n", server_port);
 
-	char* hello = "HTTP/1.1 200 OK\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length:88\nContent-Type: text/html\nConnection: Closed\n<html><body><h1>Hello, World!</h1></body><html>";
+	char* hello = "HTTP/1.1 200 OK\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length:88\nContent-Type: text/html\nConnection: Closed\n\n<html><body><h1>Hello, how are you?</h1></body><html>";
 	// write(client_sock , hello , strlen(hello));
 
 	char * message = "GET / HTTP/1.1\r\n\r\n";
@@ -76,28 +76,30 @@ int main(int argc , char *argv[])
 		if(msgsize > 4095) break;
 		buffer[msgsize-1] = 0;
 		// Send the message back to client
-		printf("REQUEST IS: %s\n", buffer);
-		printf("REALPATH IS: %s\n", realpath(buffer, actualpath));
-		// if(realpath(buffer, actualpath) == NULL) {
-		// 	printf("ERROR: %s is an incorrect path.\n", buffer);
+		if(msgsize == bytesread) printf("REQUEST IS: %s\n", buffer);
+		// printf("REALPATH IS: %s\n", realpath(buffer, actualpath));
+		// // if(realpath(buffer, actualpath) == NULL) {
+		// // 	printf("ERROR: %s is an incorrect path.\n", buffer);
+		// // 	close(client_sock);
+		// // 	return 0;
+		// // }
+		// FILE *fp = fopen(actualpath, "r");
+		// if(fp == NULL) {
+		// 	printf("Error in opening file.");
 		// 	close(client_sock);
 		// 	return 0;
 		// }
-		FILE *fp = fopen(actualpath, "r");
-		if(fp == NULL) {
-			printf("Error in opening file.");
-			close(client_sock);
-			return 0;
-		}
 
-		while((bytesread = fread(buffer, 1, 4096, fp)) > 0) {
-			write(client_sock, buffer, bytesread);
-		}
-		// write(client_sock , hello , strlen(hello));
+		// while((bytesread = fread(buffer, 1, 4096, fp)) > 0) {
+		// 	write(client_sock, buffer, bytesread);
+		// }
+		if(msgsize == bytesread) write(client_sock, hello, strlen(hello));
 		// send(server_socket, message, strlen(message), 0);
-		close(client_sock);
-		fclose(fp);
+		
+		// fclose(fp);
 	}
+
+	close(client_sock);
 
 	// if(read_size == 0)
 	// {
