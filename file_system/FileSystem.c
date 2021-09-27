@@ -4,7 +4,11 @@
 #include "UsefulStructures.h"
 
 
+
+
 File* fopen(char *path, Directory *root);
+
+int uploadFile(char *path, Directory *root, char *fileData);
 
 void makeDirectory(char *name, Directory *parentDir);
 
@@ -35,6 +39,12 @@ File* fopen(char *path, Directory *root) {
         files = files->next;
     }
     return NULL;
+}
+
+int uploadFile(char *path, Directory *root, char *fileData) {
+    
+
+    return 0;
 }
 
 void makeDirectory(char* name, Directory *parentDir) {
