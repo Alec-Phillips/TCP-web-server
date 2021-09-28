@@ -2,6 +2,7 @@
 	C ECHO client example using sockets
 */
 #include <stdio.h>	//printf
+#include <stdlib.h>
 #include <string.h>	//strlen
 #include <sys/socket.h>	//socket
 #include <arpa/inet.h>	//inet_addr
@@ -11,7 +12,7 @@ int main(int argc , char *argv[])
 {
 	int sock;
 	struct sockaddr_in server;
-	int port = 20;
+	int port = atoi(argv[1]);
 	char message[1000], server_reply[2000];
 	
 	//Create socket
@@ -36,21 +37,20 @@ int main(int argc , char *argv[])
 	puts("Connected\n");
 	
 	//keep communicating with server
-	char cmdPath[4092];
-	getcwd(cmdPath, 3000);
-	printf("%s\n", cmdPath);
+	// char cmdPath[4092];
+	// getcwd(cmdPath, 3000);
+	// printf("%s\n", cmdPath);
 
-	char* request;
+	char request[4092];
 
 	while(1)
 	{
-		puts("What file would you like to access?\n");
+		puts("Send an HTTP Request\n");
 		// printf("The current directory you are looking in:\n %s", cmdPath);
-		scanf("%s", message);
-		request = strcat(cmdPath, message);
-		request = strcat(request, "\n");
+		fgets(request, 4092, stdin);
+		// request = strcat(cmdPath, message);
 		
-		puts(request);
+		printf("Request is: %s\n", request);
 		//Send some data
 		if(send(sock, request , strlen(request) , 0) < 0)
 		{

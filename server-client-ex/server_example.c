@@ -11,15 +11,32 @@
 #include <unistd.h>	//write
 
 
+int parse(char line[])
+{
+	// int start_of_type = strrchr(line, ' ') + 1;
+	// int start_of_path = strrchr(line, '/');
+
+	// char string[7];
+	// memcpy(string, line, 6);
+	// printf("TYPE: %s", string);
+	// // puts(start_of_path);
 
 
-int main(int argc , char *argv[])
+	// // puts(path);
+
+	
+	return 0;
+}
+
+
+
+int main(int argc, char *argv[])
 {
 	int server_socket , client_sock , c , read_size;
 	struct sockaddr_in server , client;
 	char client_message[3000];
 	int server_backlog = 10;
-	int server_port = 10;
+	int server_port = atoi(argv[1]);
 	
 	//Create socket
 	server_socket = socket(AF_INET , SOCK_STREAM , 0);
@@ -66,7 +83,7 @@ int main(int argc , char *argv[])
 	}
 	printf("Connection accepted, connection number: %d\n", client_sock);
 	char buffer[4096];
-	char actualpath[PATH_MAX+1];
+	// char actualpath[PATH_MAX+1];
 	int msgsize = 0;
 	size_t bytesread;
 	//Receive a message (filepath) from client
@@ -76,7 +93,31 @@ int main(int argc , char *argv[])
 		if(msgsize > 4095) break;
 		buffer[msgsize-1] = 0;
 		// Send the message back to client
-		if(msgsize == bytesread) printf("REQUEST IS: %s\n", buffer);
+		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
+
+		//HTTP Parsing
+		char* requestType = strtok(buffer, " ");
+		char* path;
+		puts(requestType);
+		if(requestType != NULL) {
+			path = strtok(NULL, " ");
+			if(strcmp(requestType, "GET") == 0) { //get request
+
+			}
+			else if(strcmp(requestType, "POST") == 0) { //post request
+
+			}
+			else if(strcmp(requestType, "DELETE") == 0) { //delete request
+
+			}
+			else {
+				write(client_sock, hello, strlen(hello));
+			}
+		}
+
+		
+		
+
 		// printf("REALPATH IS: %s\n", realpath(buffer, actualpath));
 		// // if(realpath(buffer, actualpath) == NULL) {
 		// // 	printf("ERROR: %s is an incorrect path.\n", buffer);
@@ -93,7 +134,7 @@ int main(int argc , char *argv[])
 		// while((bytesread = fread(buffer, 1, 4096, fp)) > 0) {
 		// 	write(client_sock, buffer, bytesread);
 		// }
-		if(msgsize == bytesread) write(client_sock, hello, strlen(hello));
+		// if(msgsize == bytesread) write(client_sock, hello, strlen(hello));
 		// send(server_socket, message, strlen(message), 0);
 		
 		// fclose(fp);
