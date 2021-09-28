@@ -38,6 +38,8 @@ typedef struct File {
 
 FileNode* createFileNode();
 void addFileNode(FileNode *head, FileNode *newNode);
+int removeFileNode(FileNode *head, char *targetName);
+void freeFileNode(FileNode *targetNode);
 
 DirNode* createDirNode();
 void addDirNode(DirNode *head, DirNode *newNode);

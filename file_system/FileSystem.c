@@ -8,11 +8,15 @@
 
 File* fopen(char *path, Directory *root);
 
-int uploadFile(char *path, Directory *root, char *fileData);
+Directory* getDirectoryFromPath(char *path, Directory *root);
+
+int uploadFile(char *path, Directory *root, char *fileData, char *fileName);
+
+int deleteFile(char *path, Directory *root, char *fileName);
 
 void makeDirectory(char *name, Directory *parentDir);
 
-void createFile(char *name, Directory *pwd);
+File* createFile(char *name, Directory *pwd);
 
 Directory* changeDirectory(char *targetDir, Directory *pwd);
 
@@ -41,9 +45,42 @@ File* fopen(char *path, Directory *root) {
     return NULL;
 }
 
-int uploadFile(char *path, Directory *root, char *fileData) {
-    
+Directory* getDirectoryFromPath(char *path, Directory *root) {
+    int nextDir = 1;
+    for (int i = 1; i < strlen(path); i++) {
+        if (*(path + i) == "/") {
+            *(path + i) = '\0';
+            root = changeDirectory(path + nextDir, root);
+            if (root == NULL) {
+                return NULL;
+            }
+            nextDir = i + 1;
+        }
+    }
+    *(path + strlen(path)) = "\0";
+    root = changeDirectory(path + nextDir, root);
+    return root;
+}
 
+int uploadFile(char *path, Directory *root, char *fileData, char *fileName) {
+    root = getDirectoryFromPath(path, root);
+    if (root == NULL) {
+        return 1;
+    }
+    File *newFile = createFile(fileName, root);
+    newFile->data = realloc(newFile->data, sizeof(char) * strlen(fileData));
+    strncpy(newFile->data, fileData, strlen(fileData));
+
+    return 0;
+}
+
+int deleteFile(char *path, Directory *root, char *fileName) {
+    root = getDirectoryFromPath(path, root);
+    if (root == NULL) {
+        return 1;
+    }
+    FileNode *filesHead = root->files;
+    removeFileNode(filesHead, fileName);
     return 0;
 }
 
@@ -71,7 +108,7 @@ void makeDirectory(char* name, Directory *parentDir) {
     }
 }
 
-void createFile(char *name, Directory *pwd) {
+File* createFile(char *name, Directory *pwd) {
     /*
         creates a new File holder with the given name
         creates a new Node to hold the File, so that it
@@ -88,6 +125,7 @@ void createFile(char *name, Directory *pwd) {
     else {
         addFileNode(pwd->files, newFileNode);
     }
+    return newFile;
 }
 
 Directory* changeDirectory(char *targetDir, Directory *pwd) {
