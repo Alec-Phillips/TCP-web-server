@@ -19,5 +19,7 @@ File* createFile(char *name, Directory *pwd);
 
 Directory* changeDirectory(char *targetDir, Directory *pwd);
 
+int printFileTree(Directory *root);
+
 
 #endif

@@ -47,6 +47,7 @@ void freeFileNode(FileNode *targetNode) {
 DirNode* createDirNode() {
     DirNode *newNode = malloc(sizeof(DirNode));
     newNode->next = NULL;
+    newNode->data = NULL;
     return newNode;
 }
 
@@ -60,8 +61,10 @@ void addDirNode(DirNode *head, DirNode *newNode) {
 Directory* initializeRootDirectory() {
     Directory *root = malloc(sizeof(Directory));
     root->name = "root";
-    root->files = createFileNode();
-    root->childDirs = createDirNode();
+    // root->files = createFileNode();
+    // root->childDirs = createDirNode();
+    root->files = NULL;
+    root->childDirs = NULL;
     root->parentDir = NULL;
     root->numFiles = 0;
     root->numChildDirs = 0;

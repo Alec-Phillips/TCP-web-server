@@ -125,12 +125,22 @@ Directory* changeDirectory(char *targetDir, Directory *pwd) {
     DirNode *childDirs = pwd->childDirs;
     while (childDirs != NULL) {
         Directory *currChild = childDirs->data;
-        if (strcmp(currChild->name, targetDir)) {
+        if (!strcmp(currChild->name, targetDir)) {
             return currChild;
         }
         childDirs = childDirs->next;
     }
     return NULL;
+}
+
+int printFileTree(Directory *root) {
+    while (root != NULL) {
+        printf("%s\n", root->name);
+        root = root->childDirs->data;
+    }
+
+
+    return 0;
 }
 
 
