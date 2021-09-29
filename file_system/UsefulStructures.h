@@ -1,4 +1,5 @@
-
+#ifndef USEFULSTRUCTURES_H
+#define USEFULSTRUCTURES_H
 
 typedef struct File {
     char *name;                 // the name of the file (w/ extension)
@@ -45,3 +46,5 @@ void freeFileNode(FileNode *targetNode);
 DirNode* createDirNode();
 void addDirNode(DirNode *head, DirNode *newNode);
 Directory* initializeRootDirectory();
+
+#endif

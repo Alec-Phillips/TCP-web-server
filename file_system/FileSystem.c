@@ -2,24 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "FileSystem.h"
 #include "UsefulStructures.h"
 
 
-Directory* initializeRoot();
 
-File* openFile(char *path, Directory *root);
-
-Directory* getDirectoryFromPath(char *path, Directory *root);
-
-int uploadFile(char *path, Directory *root, char *fileData, char *fileName);
-
-int deleteFile(char *path, Directory *root, char *fileName);
-
-void makeDirectory(char *name, Directory *parentDir);
-
-File* createFile(char *name, Directory *pwd);
-
-Directory* changeDirectory(char *targetDir, Directory *pwd);
 
 
 Directory* initializeRoot() {
@@ -30,7 +17,7 @@ Directory* initializeRoot() {
 File* openFile(char *path, Directory *root) {
     int nextDir = 1;
     for (int i = 1; i < strlen(path); i++) {
-        if (*(path + i) == "/") {
+        if (*(path + i) == '/') {
             *(path + i) = '\0';
             root = changeDirectory(path + nextDir, root);
             if (root == NULL) {
@@ -39,7 +26,7 @@ File* openFile(char *path, Directory *root) {
             nextDir = i + 1;
         }
     }
-    *(path + strlen(path)) = "\0";
+    *(path + strlen(path)) = '\0';
     FileNode *files = root->files;
     while (files != NULL) {
         File *file = files->data;
@@ -54,7 +41,7 @@ File* openFile(char *path, Directory *root) {
 Directory* getDirectoryFromPath(char *path, Directory *root) {
     int nextDir = 1;
     for (int i = 1; i < strlen(path); i++) {
-        if (*(path + i) == "/") {
+        if (*(path + i) == '/') {
             *(path + i) = '\0';
             root = changeDirectory(path + nextDir, root);
             if (root == NULL) {
@@ -63,7 +50,7 @@ Directory* getDirectoryFromPath(char *path, Directory *root) {
             nextDir = i + 1;
         }
     }
-    *(path + strlen(path)) = "\0";
+    *(path + strlen(path)) = '\0';
     root = changeDirectory(path + nextDir, root);
     return root;
 }
@@ -141,7 +128,7 @@ Directory* changeDirectory(char *targetDir, Directory *pwd) {
         if (strcmp(currChild->name, targetDir)) {
             return currChild;
         }
-        currChild = childDirs->next;
+        childDirs = childDirs->next;
     }
     return NULL;
 }

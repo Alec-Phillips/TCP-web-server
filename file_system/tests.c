@@ -8,5 +8,6 @@
 
 
 int main(void) {
-    Directory *root = initializeRoot();
+    // Directory *root = initializeRoot();
+    return 0;
 }
