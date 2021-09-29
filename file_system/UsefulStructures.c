@@ -55,3 +55,14 @@ void addDirNode(DirNode *head, DirNode *newNode) {
     }
     head->next = newNode;
 }
+
+Directory* initializeRootDirectory() {
+    Directory *root = malloc(sizeof(Directory));
+    root->name = "root";
+    root->files = createFileNode();
+    root->childDirs = createDirNode();
+    root->parentDir = NULL;
+    root->numFiles = 0;
+    root->numChildDirs = 0;
+    return root;
+}

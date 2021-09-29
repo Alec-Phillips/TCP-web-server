@@ -1,12 +1,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "UsefulStructures.h"
 
 
+Directory* initializeRoot();
 
-
-File* fopen(char *path, Directory *root);
+File* openFile(char *path, Directory *root);
 
 Directory* getDirectoryFromPath(char *path, Directory *root);
 
@@ -21,7 +22,12 @@ File* createFile(char *name, Directory *pwd);
 Directory* changeDirectory(char *targetDir, Directory *pwd);
 
 
-File* fopen(char *path, Directory *root) {
+Directory* initializeRoot() {
+    Directory* root = initializeRootDirectory();
+    return root;
+}
+
+File* openFile(char *path, Directory *root) {
     int nextDir = 1;
     for (int i = 1; i < strlen(path); i++) {
         if (*(path + i) == "/") {
