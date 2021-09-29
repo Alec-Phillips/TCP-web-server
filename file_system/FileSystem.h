@@ -5,7 +5,7 @@
 
 Directory* initializeRoot();
 
-File* openFile(char *path, Directory *root);
+char* openFile(char *path, Directory *root);
 
 Directory* getDirectoryFromPath(char *path, Directory *root);
 
@@ -14,6 +14,8 @@ int uploadFile(char *path, Directory *root, char *fileData, char *fileName);
 int deleteFile(char *path, Directory *root, char *fileName);
 
 void makeDirectory(char *name, Directory *parentDir);
+
+int deleteDirectory(char *path, Directory *root);
 
 File* createFile(char *name, Directory *pwd);
 

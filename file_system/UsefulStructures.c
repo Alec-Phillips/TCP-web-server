@@ -70,3 +70,33 @@ Directory* initializeRootDirectory() {
     root->numChildDirs = 0;
     return root;
 }
+
+int removeDirNode(DirNode *head, char *targetName) {
+    while (head != NULL) {
+        DirNode *prev = head;
+        head = head->next;
+        if (!strcmp(head->data->name, targetName)) {
+            prev->next = head->next;
+            freeDirectoryNode(head);
+        }
+    }
+    return 0;
+}
+
+void freeDirectoryNode(DirNode *targetNode) {
+    Directory *directory = targetNode->data;
+    FileNode *files = directory->files;
+    while (files != NULL){
+        FileNode *toDelete = files;
+        files = files->next;
+        freeFileNode(toDelete);
+    }
+    DirNode *nextUp = targetNode->data->childDirs;
+    while (nextUp != NULL) {
+        DirNode *delete = nextUp;
+        nextUp = nextUp->next;
+        freeDirectoryNode(delete);
+    }
+    free(directory);
+    free(targetNode);
+}

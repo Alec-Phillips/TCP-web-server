@@ -46,5 +46,7 @@ void freeFileNode(FileNode *targetNode);
 DirNode* createDirNode();
 void addDirNode(DirNode *head, DirNode *newNode);
 Directory* initializeRootDirectory();
+int removeDirNode(DirNode *head, char *targetName);
+void freeDirectoryNode(DirNode *targetNode);
 
 #endif

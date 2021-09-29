@@ -14,7 +14,7 @@ Directory* initializeRoot() {
     return root;
 }
 
-File* openFile(char *path, Directory *root) {
+char* openFile(char *path, Directory *root) {
     int nextDir = 1;
     for (int i = 1; i < strlen(path); i++) {
         if (*(path + i) == '/') {
@@ -26,12 +26,12 @@ File* openFile(char *path, Directory *root) {
             nextDir = i + 1;
         }
     }
-    *(path + strlen(path)) = '\0';
+    // *(path + strlen(path)) = '\0';
     FileNode *files = root->files;
     while (files != NULL) {
         File *file = files->data;
-        if (strcmp(file->name, path + nextDir)) {
-            return file;
+        if (!strcmp(file->name, path + nextDir)) {
+            return file->data;
         }
         files = files->next;
     }
@@ -50,8 +50,9 @@ Directory* getDirectoryFromPath(char *path, Directory *root) {
             nextDir = i + 1;
         }
     }
-    *(path + strlen(path)) = '\0';
+
     root = changeDirectory(path + nextDir, root);
+
     return root;
 }
 
@@ -60,9 +61,24 @@ int uploadFile(char *path, Directory *root, char *fileData, char *fileName) {
     if (root == NULL) {
         return 1;
     }
-    File *newFile = createFile(fileName, root);
-    newFile->data = realloc(newFile->data, sizeof(char) * strlen(fileData));
-    strncpy(newFile->data, fileData, strlen(fileData));
+    File *newFile = malloc(sizeof(File));
+    newFile->name = fileName;
+    newFile->data = fileData;
+    FileNode *newFileNode = malloc(sizeof(FileNode));
+    newFileNode->data = newFile;
+    newFileNode->next = NULL;
+    if (root->files == NULL) {
+        root->files = newFileNode;
+    }
+    else {
+        FileNode *curr = root->files;
+        while (curr->next != NULL) {
+            curr = curr->next;
+        }
+        curr->next = newFileNode;
+    }
+    // newFile->data = realloc(newFile->data, sizeof(char) * strlen(fileData));
+    // strncpy(newFile->data, fileData, strlen(fileData));
 
     return 0;
 }
@@ -101,6 +117,19 @@ void makeDirectory(char* name, Directory *parentDir) {
     }
 }
 
+int deleteDirectory(char *path, Directory *root) {
+    Directory *targetDir = getDirectoryFromPath(path, root);
+    DirNode *head = targetDir->parentDir->childDirs;
+    if (!strcmp(head->data->name, targetDir->name)) {
+        targetDir->parentDir->childDirs = head->next;
+        freeDirectoryNode(head);
+    }
+    else {
+        removeDirNode(head, targetDir->name);
+    }
+    return 0;
+}
+
 File* createFile(char *name, Directory *pwd) {
     /*
         creates a new File holder with the given name
@@ -130,6 +159,7 @@ Directory* changeDirectory(char *targetDir, Directory *pwd) {
         }
         childDirs = childDirs->next;
     }
+    printf("returning null\n");
     return NULL;
 }
 

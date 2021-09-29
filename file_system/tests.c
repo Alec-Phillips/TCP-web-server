@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 #include "UsefulStructures.h"
@@ -19,6 +20,23 @@ int testCreateDirectories(Directory *root) {
     assert(strcmp(desktop->name, "desktop") == 0);
     assert(strcmp(files->name, "files") == 0);
 
+    // free(documents);
+    // free(desktop);
+    // free(files);
+
+    return 0;
+}
+
+int testUploadFile(Directory *root) {
+    char path[] = "/desktop";
+    char *fileName = "test_file.txt";
+    char *fileData = "This is a test file";
+    uploadFile(path, root, fileData, fileName);
+    // char *fileContents = root->childDirs->next->data->files->data->data;
+
+    char filePath[] = "/desktop/test_file.txt";
+    char *fileContents = openFile(filePath, root);
+    printf("%s\n", fileContents);
     return 0;
 }
 
@@ -30,6 +48,7 @@ int main(void) {
     if (result == 0){
         printf("pass\n");
     }
+    testUploadFile(root);
     // makeDirectory("files", )
     
     return 0;
