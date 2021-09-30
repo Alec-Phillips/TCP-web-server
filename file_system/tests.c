@@ -5,7 +5,8 @@
 #include "UsefulStructures.h"
 #include "FileSystem.h"
 
-
+// Compilation command: 
+//      gcc UsefulStructures.c FileSystem.c tests.c -Wall -o tests
 
 
 int testCreateDirectories(Directory *root) {
@@ -32,11 +33,35 @@ int testUploadFile(Directory *root) {
     char *fileName = "test_file.txt";
     char *fileData = "This is a test file";
     uploadFile(path, root, fileData, fileName);
-    // char *fileContents = root->childDirs->next->data->files->data->data;
 
     char filePath[] = "/desktop/test_file.txt";
     char *fileContents = openFile(filePath, root);
+
+    assert(!strcmp(fileContents, "This is a test file"));
+
+    char newPath[] = "/documents/files";
+    uploadFile(newPath, root, fileData, fileName);
+
+    char newFilePath[] = "/documents/files/test_file.txt";
+    fileContents = openFile(newFilePath, root);
     printf("%s\n", fileContents);
+    assert(!strcmp(fileContents, "This is a test file"));
+
+    return 0;
+}
+
+int testUploadToRoot(Directory *root) {
+
+    char path[] = "/";
+    char *fileName = "test_file.txt";
+    char *fileData = "This is a test file";
+    uploadFile(path, root, fileData, fileName);
+
+    char filePath[] = "/test_file.txt";
+    char *fileContents = openFile(filePath, root);
+
+    assert(!strcmp(fileContents, "This is a test file"));
+
     return 0;
 }
 
@@ -49,6 +74,7 @@ int main(void) {
         printf("pass\n");
     }
     testUploadFile(root);
+    testUploadToRoot(root);
     // makeDirectory("files", )
     
     return 0;

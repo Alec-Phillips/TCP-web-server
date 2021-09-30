@@ -16,10 +16,13 @@ Directory* initializeRoot() {
 
 char* openFile(char *path, Directory *root) {
     int nextDir = 1;
+
     for (int i = 1; i < strlen(path); i++) {
         if (*(path + i) == '/') {
-            *(path + i) = '\0';
-            root = changeDirectory(path + nextDir, root);
+            // *(path + i) = '\0';
+            char currPath[i - nextDir];
+            strncpy(currPath, path + nextDir, i - nextDir);
+            root = changeDirectory(currPath, root);
             if (root == NULL) {
                 return NULL;
             }
@@ -28,6 +31,7 @@ char* openFile(char *path, Directory *root) {
     }
     // *(path + strlen(path)) = '\0';
     FileNode *files = root->files;
+    // printf("%s\n", files->data->name);
     while (files != NULL) {
         File *file = files->data;
         if (!strcmp(file->name, path + nextDir)) {
@@ -39,11 +43,18 @@ char* openFile(char *path, Directory *root) {
 }
 
 Directory* getDirectoryFromPath(char *path, Directory *root) {
+    if (strlen(path) == 1){
+        return root;
+    }
     int nextDir = 1;
     for (int i = 1; i < strlen(path); i++) {
         if (*(path + i) == '/') {
-            *(path + i) = '\0';
-            root = changeDirectory(path + nextDir, root);
+            // *(path + i) = '\0';
+            // root = changeDirectory(path + nextDir, root);
+            // *(path + i) = '\0';
+            char currPath[i - nextDir];
+            strncpy(currPath, path + nextDir, i - nextDir);
+            root = changeDirectory(currPath, root);
             if (root == NULL) {
                 return NULL;
             }
