@@ -48,7 +48,6 @@ int main(int argc , char *argv[])
 		puts("Send an HTTP Request\n");
 		// printf("The current directory you are looking in:\n %s", cmdPath);
 		fgets(request, 4092, stdin);
-		// request = strcat(cmdPath, message);
 		
 		printf("Request is: %s\n", request);
 		//Send some data
@@ -65,7 +64,7 @@ int main(int argc , char *argv[])
 			break;
 		}
 		
-		puts("Server reply :");
+		puts("Server reply: ");
 		puts(server_reply);
 		fflush(stdout);
 	}
