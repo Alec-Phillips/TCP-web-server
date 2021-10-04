@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include "/Users/lchris/Desktop/Coding/schoolprojects/TCP-web-server/file_system/FileSystem.h" // Change
 #include "/Users/lchris/Desktop/Coding/schoolprojects/TCP-web-server/file_system/UsefulStructures.h" // Change
+#include <assert.h>
 
 /* 
 	Note:
@@ -29,7 +30,67 @@
 	HTTP Response Creator
 */
 
+// Originally made by Geeks for Geeks: https://www.geeksforgeeks.org/c-program-replace-word-text-another-given-word/
+char* replaceWord(const char* s, const char* oldW,
+                  const char* newW)
+{
+    char* result;
+    int i, cnt = 0;
+    int newWlen = strlen(newW);
+    int oldWlen = strlen(oldW);
+  
+    // Counting the number of times old word
+    // occur in the string
+    for (i = 0; s[i] != '\0'; i++) {
+        if (strstr(&s[i], oldW) == &s[i]) {
+            cnt++;
+  
+            // Jumping to index after the old word.
+            i += oldWlen - 1;
+        }
+    }
+  
+    // Making new string of enough length
+    result = (char*)malloc(i + cnt * (newWlen - oldWlen) + 1);
+  
+    i = 0;
+    while (*s) {
+        // compare the substring with the result
+        if (strstr(s, oldW) == s) {
+            strcpy(&result[i], newW);
+            i += newWlen;
+            s += oldWlen;
+        }
+        else
+            result[i++] = *s++;
+    }
+  
+    result[i] = '\0';
+    return result;
+}
+
 // implement here before I implement POST
+// int testUploadFile(Directory *root) {
+//     char path[] = "/desktop";
+//     char *fileName = "test_file.txt";
+//     char *fileData = "This is a test file";
+//     uploadFile(path, root, fileData, fileName);
+
+//     char filePath[] = "/desktop/test_file.txt";
+//     char *fileContents = openFile(filePath, root);
+
+//     assert(!strcmp(fileContents, "This is a test file"));
+
+//     char newPath[] = "/documents/files";
+//     uploadFile(newPath, root, fileData, fileName);
+
+//     char newFilePath[] = "/documents/files/test_file.txt";
+//     fileContents = openFile(newFilePath, root);
+//     printf("%s\n", fileContents);
+//     assert(!strcmp(fileContents, "This is a test file"));
+
+//     return 0;
+// }
 int testUploadToRoot(Directory *root) {
 
     char path[] = "/";
@@ -40,7 +101,7 @@ int testUploadToRoot(Directory *root) {
     char filePath[] = "/test_file.txt";
     char *fileContents = openFile(filePath, root);
 
-    // assert(!strcmp(fileContents, "This is a test file"));
+    assert(!strcmp(fileContents, "This is a test file"));
 
     return 0;
 }
@@ -61,7 +122,7 @@ void requestTypeString(char* requestString, int httpStatus) {
 	}
 }
 
-void createHTMLResponse(char *httpResponse, int httpStatus, char* message) {
+void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
 	//Time stuff may be implemented later.
 
 	// time_t t = time(NULL);
@@ -91,6 +152,7 @@ int main(int argc, char *argv[])
 	int server_port = atoi(argv[1]);
 	Directory* root = initializeRoot();
 	testUploadToRoot(root);
+	// printFileTree(root);
 
 	//Create socket
 	server_socket = socket(AF_INET , SOCK_STREAM , 0); //assigns ID to server_socket
@@ -154,47 +216,59 @@ int main(int argc, char *argv[])
 				path = strtok(NULL, " ");
 				// printf("%d\n", strcmp(path, "/"));
 				if(strcmp(requestType, "GET") == 0) { //get request
+					puts(path);
+					// puts(openFile("/cooltext.txt", root));
 					char* fileContents = openFile(path, root);
 					if(fileContents == NULL) {
-						createHTMLResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
 					}
 					else {
-						createHTMLResponse(HTTPResponse, 200, fileContents);
+						createHTTPResponse(HTTPResponse, 200, fileContents);
 					}
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 				}
 				else if(strcmp(requestType, "POST") == 0) { //post request
-					char* fileName = strstr(buffer, "fileName");
-					char* fileData = strstr(buffer, "fileData");
-					if(path != NULL) {
-						// if(strstr(buffer, "fileName") != NULL) {
-						// 	fileName = strstr(buffer, "fileName");
-						// }
-						// if(strstr(buffer, "fileData") != NULL) {
-						// 	fileData = strstr(buffer, "fileData");
-						// }
-						puts(fileName);
-						puts(fileData);
 
-						// char* currentHeader = strtok(NULL, " ");
-						// while(currentHeader != NULL) {
-						// 	if(strstr(currentHeader, "fileName") != NULL) {
-						// 		fileName = currentHeader;
-						// 	}
-						// 	if(strstr(currentHeader, "fileData") != NULL) {
-						// 		fileData = currentHeader;
-						// 	}
-						// 	// puts(currentHeader);
-						// }
-						
+					char* fileQuery = strtok(path, "?");
+					char* dataQuery = strtok(NULL, " ");
+					char* fileData = replaceWord(strstr(dataQuery, "fileData=") + 9, "%20", " ");
+					char* fileName = strtok(strstr(dataQuery, "fileName=") + 9, "&");
+					printf("%s\n", fileQuery);			
+					printf("%s\n", fileData);
+					printf("%s\n", fileName);	
+					printf("%d\n", strlen(fileQuery));
+
+					// uploadFile(fileQuery, root, fileData, fileName);
+					// fileQuery = "/"
+					// fileName = "/cooltext.txt"
+					char rootQuery[100];
+					char fileNameCopy[strlen(fileName)]; 
+					if(strlen(fileQuery) > 1) {
+						fileNameCopy[0] = '/';
+						if(getDirectoryFromPath(fileQuery, root) == NULL) {
+							makeDirectory(fileQuery + 1, root);
+						}
 					}
-					uploadFile(path, root, fileData, fileName);
-					if(openFile(path, root) == fileData) {
-						createHTMLResponse(HTTPResponse, 200, sprintf("File %s created successfully", fileName));
+					strcpy(rootQuery, fileQuery);
+					strcat(fileNameCopy, fileName);
+					strcat(rootQuery, fileNameCopy);
+
+					//uploadFile("/cooltext.txt", root, "..", cooltext.txt);
+					uploadFile(fileQuery, root, fileData, fileName);
+					// puts(openFile(rootQuery, root));
+					// puts(fileData);
+					// printf("%d\n", strcmp(openFile(rootQuery, root), fileData));
+
+					char HTMLResponse[100];
+					if(strcmp(openFile(rootQuery, root), fileData) == 0) {
+						sprintf(HTMLResponse, "File %s created successfully at path %s", fileName, rootQuery);
+						createHTTPResponse(HTTPResponse, 200, HTMLResponse);
 					}
 					else {
-						createHTMLResponse(HTTPResponse, 400, sprintf("File %s not created successfully. Something went wrong.", fileName));
+						sprintf(HTMLResponse, "File %s not created successfully. Something went wrong.", fileName);
+						createHTTPResponse(HTTPResponse, 400, HTMLResponse);
 					}
+					printf("RESPONSE:\n%s\n", HTTPResponse);
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 				}
 				else if(strcmp(requestType, "DELETE") == 0) { //delete request
