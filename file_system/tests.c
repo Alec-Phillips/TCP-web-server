@@ -75,7 +75,5 @@ int main(void) {
     }
     testUploadFile(root);
     testUploadToRoot(root);
-    // makeDirectory("files", )
-    
     return 0;
 }
