@@ -75,7 +75,9 @@ int uploadFile(char *path, Directory *root, char *fileData, char *fileName) {
         return 1;
     }
     File *newFile = malloc(sizeof(File));
-    newFile->name = fileName;
+    newFile->name = (char *) malloc(strlen(fileName));
+    strcpy(newFile->name, fileName);
+    // newFile->name = fileName;
     newFile->data = fileData;
     FileNode *newFileNode = malloc(sizeof(FileNode));
     newFileNode->data = newFile;
@@ -114,7 +116,11 @@ void makeDirectory(char* name, Directory *parentDir) {
             childDirectories list
     */
     Directory *newDir = malloc(sizeof(Directory));
-    newDir->name = name;
+    // newDir->name = name;
+    puts("HERE");
+    newDir->name = (char *) malloc(strlen(name));
+    strcpy(newDir->name, name);
+    puts("Made it");
     newDir->parentDir = parentDir;
     newDir->files = NULL;
     newDir->childDirs = NULL;
@@ -150,7 +156,10 @@ File* createFile(char *name, Directory *pwd) {
             can be added to the current directory's files list
     */
     File *newFile = malloc(sizeof(File));
-    newFile->name = name;
+    // newFile->name = name;
+    newFile->name = (char *) malloc(strlen(name));
+    puts(name);
+    strcpy(newFile->name, name);
     newFile->data = malloc(20000);
     FileNode *newFileNode = createFileNode();
     newFileNode->data = newFile;
