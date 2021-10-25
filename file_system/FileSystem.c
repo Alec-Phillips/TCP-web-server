@@ -16,12 +16,14 @@ Directory* initializeRoot() {
 
 char* openFile(char *path, Directory *root) {
     int nextDir = 1;
-
+    puts(path);
     for (int i = 1; i < strlen(path); i++) {
         if (*(path + i) == '/') {
             // *(path + i) = '\0';
             char currPath[i - nextDir];
             strncpy(currPath, path + nextDir, i - nextDir);
+            puts(currPath);
+            puts(root->name);
             root = changeDirectory(currPath, root);
             if (root == NULL) {
                 return NULL;
@@ -165,6 +167,7 @@ Directory* changeDirectory(char *targetDir, Directory *pwd) {
     DirNode *childDirs = pwd->childDirs;
     while (childDirs != NULL) {
         Directory *currChild = childDirs->data;
+        puts(currChild->name);
         if (!strcmp(currChild->name, targetDir)) {
             return currChild;
         }
@@ -174,7 +177,12 @@ Directory* changeDirectory(char *targetDir, Directory *pwd) {
     return NULL;
 }
 
+
+
 int printFileTree(Directory *root) {
+
+    puts(root->name);
+    root = root->childDirs->data;
     while (root != NULL) {
         printf("%s\n", root->name);
         root = root->childDirs->data;

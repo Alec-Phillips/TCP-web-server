@@ -6,8 +6,8 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <unistd.h>
-#include "/Users/lchris/Desktop/Coding/schoolprojects/TCP-web-server/file_system/FileSystem.h" // Change
-#include "/Users/lchris/Desktop/Coding/schoolprojects/TCP-web-server/file_system/UsefulStructures.h" // Change
+#include "/Users/alecphillips/Documents/Fall 2021/COMP379/TCP-web-server/file_system/FileSystem.h" // Change
+#include "/Users/alecphillips/Documents/Fall 2021/COMP379/TCP-web-server/file_system/UsefulStructures.h" // Change
 #include <assert.h>
 
 /* 
@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
 	int server_backlog = 10;
 	int server_port = atoi(argv[1]);
 	Directory* root = initializeRoot();
-	testUploadToRoot(root);
+	// testUploadToRoot(root);
 	// printFileTree(root);
 
 	//Create socket
@@ -198,10 +198,11 @@ int main(int argc, char *argv[])
 		char buffer[4096];
 		int msgsize = 0;
 		size_t bytesread;
-
+		int connCount = 0;
 		// Begin receiving HTTP requests (either from the browser, Postman, or client)
 		while((bytesread = read(client_sock, buffer+msgsize, sizeof(buffer)-msgsize-1)) > 0)
 		{	
+			
 			msgsize += bytesread;
 			if(msgsize > 4095) break;
 			buffer[msgsize-1] = 0;
@@ -211,12 +212,25 @@ int main(int argc, char *argv[])
 			//HTTP Parsing
 			char* requestType = strtok(buffer, " "); // GET, POST, DELETE
 			char* path;
-
+			
 			if(requestType != NULL) {
 				path = strtok(NULL, " ");
 				// printf("%d\n", strcmp(path, "/"));
+				puts("---------");
 				if(strcmp(requestType, "GET") == 0) { //get request
+					puts("file tree:");
+					puts(root->name);
+					puts(root->childDirs->data->name);
+					puts(root->childDirs->data->files->data->name);
+					printf("%p\n", &root);
 					puts(path);
+					path = strtok(buffer + 4, " ");
+					puts(path);
+					// puts(bytesread);
+					// char* fileQuery = strtok(path, "?");
+					// char* dataQuery = strtok(NULL, " ");
+					// printf("%s\n", fileQuery);			
+					// printf("%s\n", fileData);
 					// puts(openFile("/cooltext.txt", root));
 					char* fileContents = openFile(path, root);
 					if(fileContents == NULL) {
@@ -245,7 +259,10 @@ int main(int argc, char *argv[])
 					char fileNameCopy[strlen(fileName)]; 
 					if(strlen(fileQuery) > 1) {
 						fileNameCopy[0] = '/';
+						// printf("%s\n", fileQuery);
 						if(getDirectoryFromPath(fileQuery, root) == NULL) {
+							puts("****------*******");
+							puts(fileQuery + 1);
 							makeDirectory(fileQuery + 1, root);
 						}
 					}
@@ -255,7 +272,13 @@ int main(int argc, char *argv[])
 
 					//uploadFile("/cooltext.txt", root, "..", cooltext.txt);
 					uploadFile(fileQuery, root, fileData, fileName);
-					// puts(openFile(rootQuery, root));
+					puts(openFile(rootQuery, root));
+					printf("%p\n", &root);
+					puts("*************");
+					puts("file tree:");
+					puts(root->name);
+					puts(root->childDirs->data->name);
+					puts(root->childDirs->data->files->data->name);
 					// puts(fileData);
 					// printf("%d\n", strcmp(openFile(rootQuery, root), fileData));
 
@@ -270,6 +293,11 @@ int main(int argc, char *argv[])
 					}
 					printf("RESPONSE:\n%s\n", HTTPResponse);
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+
+					puts("file tree:");
+					puts(root->name);
+					puts(root->childDirs->data->name);
+					puts(root->childDirs->data->files->data->name);
 				}
 				else if(strcmp(requestType, "DELETE") == 0) { //delete request
 

@@ -65,15 +65,36 @@ int testUploadToRoot(Directory *root) {
     return 0;
 }
 
+int testFakePost(Directory *root) {
+    char *fileQuery = "/desktop";
+    char *fileData = "this is some cool text";
+    char *fileName = "cooltext.txt";
+    if (getDirectoryFromPath(fileQuery, root) == NULL) {
+        printf("1\n");
+        makeDirectory(fileQuery + 1, root);
+    }
+    getDirectoryFromPath(fileQuery, root);
+    uploadFile(fileQuery, root, fileData, fileName);
+    char *path = "/desktop/cooltext.txt";
+    char *fileContents = openFile(path, root);
+    puts(openFile(path, root));
+    printf("%s\n", fileContents);
+    puts(fileContents);
+    return 1;
+}
+
 
 int main(void) {
     printf("hello\n");
     Directory *root = initializeRoot();
-    int result = testCreateDirectories(root);
-    if (result == 0){
-        printf("pass\n");
-    }
-    testUploadFile(root);
-    testUploadToRoot(root);
+    // int result = testCreateDirectories(root);
+    // if (result == 0){
+    //     printf("pass\n");
+    // }
+    // testUploadFile(root);
+    // testUploadToRoot(root);
+    testFakePost(root);
+    printf("---\n");
+    puts(openFile("/desktop/cooltext.txt", root));
     return 0;
 }
