@@ -43,7 +43,7 @@ char* openFile(char *path, Directory *root) {
 }
 
 Directory* getDirectoryFromPath(char *path, Directory *root) {
-    if (strlen(path) == 1){
+    if (strlen(path) == 1) {
         return root;
     }
     int nextDir = 1;

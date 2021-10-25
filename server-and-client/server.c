@@ -93,12 +93,13 @@ char* replaceWord(const char* s, const char* oldW,
 // }
 int testUploadToRoot(Directory *root) {
 
-    char path[] = "/";
+    char path[] = "/desktop";
+	makeDirectory("desktop", root);
     char *fileName = "test_file.txt";
     char *fileData = "This is a test file";
+	
     uploadFile(path, root, fileData, fileName);
-
-    char filePath[] = "/test_file.txt";
+    char filePath[] = "/desktop/test_file.txt";
     char *fileContents = openFile(filePath, root);
 
     assert(!strcmp(fileContents, "This is a test file"));
@@ -151,7 +152,7 @@ int main(int argc, char *argv[])
 	int server_backlog = 10;
 	int server_port = atoi(argv[1]);
 	Directory* root = initializeRoot();
-	testUploadToRoot(root);
+	// testUploadToRoot(root);
 	// printFileTree(root);
 
 	//Create socket
@@ -213,12 +214,19 @@ int main(int argc, char *argv[])
 			char* path;
 
 			if(requestType != NULL) {
+				if(root->childDirs != NULL){
+					printf("WE IN HERE");
+					printf("%s\n", root->childDirs->data->name);
+					// if(root->childDirs->data->name == "desktop") puts("THERE IS A DESKTOP HOMIE");
+					puts(root->childDirs->data->files->data);
+				}
 				path = strtok(NULL, " ");
 				// printf("%d\n", strcmp(path, "/"));
 				if(strcmp(requestType, "GET") == 0) { //get request
 					puts(path);
-					// puts(openFile("/cooltext.txt", root));
+					printf("%d\n", strlen(path));
 					char* fileContents = openFile(path, root);
+					puts(fileContents);
 					if(fileContents == NULL) {
 						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
 					}
@@ -237,17 +245,15 @@ int main(int argc, char *argv[])
 					printf("%s\n", fileData);
 					printf("%s\n", fileName);	
 					printf("%d\n", strlen(fileQuery));
-
-					// uploadFile(fileQuery, root, fileData, fileName);
-					// fileQuery = "/"
-					// fileName = "/cooltext.txt"
 					char rootQuery[100];
 					char fileNameCopy[strlen(fileName)]; 
-					if(strlen(fileQuery) > 1) {
+					if(strlen(fileQuery) > 1) { //Are we adding to sub-directory?
 						fileNameCopy[0] = '/';
+						puts(fileQuery);
 						if(getDirectoryFromPath(fileQuery, root) == NULL) {
 							makeDirectory(fileQuery + 1, root);
 						}
+						printf("figidfgdfigid %s\n", root->childDirs->data->name);
 					}
 					strcpy(rootQuery, fileQuery);
 					strcat(fileNameCopy, fileName);
@@ -260,9 +266,12 @@ int main(int argc, char *argv[])
 					// printf("%d\n", strcmp(openFile(rootQuery, root), fileData));
 
 					char HTMLResponse[100];
+					// puts(rootQuery);
 					if(strcmp(openFile(rootQuery, root), fileData) == 0) {
 						sprintf(HTMLResponse, "File %s created successfully at path %s", fileName, rootQuery);
 						createHTTPResponse(HTTPResponse, 200, HTMLResponse);
+						printf("==================\n");
+						printf("%s\n", openFile(rootQuery, root));
 					}
 					else {
 						sprintf(HTMLResponse, "File %s not created successfully. Something went wrong.", fileName);
