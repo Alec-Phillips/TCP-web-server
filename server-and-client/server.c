@@ -6,8 +6,8 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <unistd.h>
-#include "/Users/lchris/Desktop/Coding/schoolprojects/TCP-web-server/file_system/FileSystem.h" // Change
-#include "/Users/lchris/Desktop/Coding/schoolprojects/TCP-web-server/file_system/UsefulStructures.h" // Change
+#include "/Users/alecphillips/Documents/Fall 2021/COMP379/TCP-web-server/file_system/FileSystem.h" // Change
+#include "/Users/alecphillips/Documents/Fall 2021/COMP379/TCP-web-server/file_system/UsefulStructures.h" // Change
 #include <assert.h>
 
 /* 
