@@ -6,6 +6,8 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
 #include "/Users/alecphillips/Documents/Fall 2021/COMP379/TCP-web-server/file_system/FileSystem.h" // Change
 #include "/Users/alecphillips/Documents/Fall 2021/COMP379/TCP-web-server/file_system/UsefulStructures.h" // Change
 #include <assert.h>
@@ -29,6 +31,37 @@
 /*
 	HTTP Response Creator
 */
+
+
+
+// Here is our global array (eventually hashmap, hopefully)
+// holds the filenames and their corresponding semaphore
+
+typedef struct FileSem {
+	char *filePath;
+	sem_t mutex;
+} FileSem;
+
+FileSem fileSemaphores[200];
+int numFiles = 0;
+
+void addFileSem(char *filePath) {
+	FileSem newFileSem;
+	newFileSem.filePath = (char *) malloc(strlen(filePath));
+	strcpy(newFileSem.filePath, filePath);
+	fileSemaphores[numFiles] = newFileSem;
+	numFiles ++;
+}
+
+FileSem* getFileSem(char *target) {
+	for (int i = 0; i < numFiles; i ++) {
+		FileSem curr = fileSemaphores[i];
+		if (! strcmp(curr.filePath, target)) {
+			return &curr;
+		}
+	}
+	return NULL;
+}
 
 // Originally made by Geeks for Geeks: https://www.geeksforgeeks.org/c-program-replace-word-text-another-given-word/
 char* replaceWord(const char* s, const char* oldW,
