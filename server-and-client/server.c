@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
-
 #include <assert.h>
 
 
@@ -31,6 +30,8 @@
 void connection_handler(void* socket_desc);
 void getRealPath(char buffer[], char actualpath[]);
 void getFileContents(char actualpath[], char fileContents[]);
+void createHTTPResponse(char *httpResponse, int httpStatus, char* message);
+void requestTypeString(char* requestString, int httpStatus);
 
 /*
 	HTTP Response Creator
@@ -106,45 +107,6 @@ char* replaceWord(const char* s, const char* oldW,
     return result;
 }
 
-int testUploadToRoot(Directory *root) {
-    char path[] = "/desktop";
-	makeDirectory("desktop", root);
-    char *fileName = "test_file.txt";
-    char *fileData = "This is a test file";
-    uploadFile(path, root, fileData, fileName);
-    char filePath[] = "/desktop/test_file.txt";
-    char *fileContents = openFile(filePath, root);
-    assert(!strcmp(fileContents, "This is a test file"));
-    return 0;
-}
-
-void requestTypeString(char* requestString, int httpStatus) {
-	switch(httpStatus) {
-		case 200:
-			sprintf(requestString, "OK");
-			break;
-		case 400:
-			sprintf(requestString, "Bad Request");
-			break;
-		case 404:
-			sprintf(requestString, "Not Found");
-			break;
-		default:
-			sprintf(requestString, "Unknown");
-	}
-}
-
-void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
-	//Time stuff may be implemented later.
-
-	// time_t t = time(NULL);
-	// struct tm tm = *localtime(&t);
-	// printf("now: %d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-	char RTString[10];
-	requestTypeString(RTString, httpStatus);
-	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/html\nConnection: Closed\n\n<html><body><p>%s</p></body><html>", httpStatus, RTString, strlen(message) + 29, message);
-	puts(httpResponse);
-}
 
 int main(int argc, char *argv[])
 {
@@ -161,9 +123,6 @@ int main(int argc, char *argv[])
 	struct sockaddr_in server, client;
 	int server_backlog = 10;
 	int server_port = atoi(argv[1]);
-	Directory* root = initializeRoot();
-	// testUploadToRoot(root);
-	// printFileTree(root);
 
 	//Create socket
 	server_socket = socket(AF_INET , SOCK_STREAM , 0); //assigns ID to server_socket
@@ -258,26 +217,42 @@ void connection_handler(void* socket_desc) {
 			path = strtok(NULL, " ");
 			if(strcmp(requestType, "GET") == 0) { //get request
 				getRealPath(path, actualpath); //realpath gets stored to actualpath
-				getFileContents(actualpath, fileContents);
-				if(fileContents == NULL) {
+				FileSem* file_sem = getFileSem(actualpath);
+				if(file_sem == NULL) {
 					createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 				}
 				else {
-					createHTTPResponse(HTTPResponse, 200, fileContents);
+					sem_wait(&(file_sem->mutex));
+					getFileContents(actualpath, fileContents);
+					if(fileContents == NULL) {
+						createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.");
+					}
+					else {
+						createHTTPResponse(HTTPResponse, 200, fileContents);
+					}
+					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+					sem_post(&(file_sem->mutex));
 				}
-				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
 			else if(strcmp(requestType, "POST") == 0) { //post request
-				char* fileQuery = strtok(path, "?");
-				char* dataQuery = strtok(NULL, " ");
-				char* fileData = replaceWord(strstr(dataQuery, "fileData=") + 9, "%20", " ");
-				char* fileName = strtok(strstr(dataQuery, "fileName=") + 9, "&");
-				printf("%s\n", fileQuery);			
-				printf("%s\n", fileData);
-				printf("%s\n", fileName);	
-				printf("%d\n", strlen(fileQuery));
-				char rootQuery[100];
-				char fileNameCopy[strlen(fileName)]; 
+				char* fileQuery = strtok(NULL, "\n");
+				int i = 0;
+				while(i < 10) {
+					fileQuery = strtok(NULL, "\n");
+					printf("%s\n", fileQuery);
+					i++;
+				}
+				// fileQuery = strtok(NULL, "\n");
+				// char* dataQuery = strtok(NULL, " ");
+				// char* fileData = replaceWord(strstr(dataQuery, "fileData=") + 9, "%20", " ");
+				// char* fileName = strtok(strstr(dataQuery, "fileName=") + 9, "&");
+				printf("FILEQUERY: %s\n", fileQuery);			
+				// printf("%s\n", fileData);
+				// printf("%s\n", fileName);	
+				// printf("%d\n", strlen(fileQuery));
+				// char rootQuery[100];
+				// char fileNameCopy[strlen(fileName)]; 
 				// if(strlen(fileQuery) > 1) { //Are we adding to sub-directory?
 				// 	fileNameCopy[0] = '/';
 				// 	puts(fileQuery);
@@ -285,9 +260,9 @@ void connection_handler(void* socket_desc) {
 				// 		makeDirectory(fileQuery + 1, root);
 				// 	}
 				// }
-				strcpy(rootQuery, fileQuery);
-				strcat(fileNameCopy, fileName);
-				strcat(rootQuery, fileNameCopy);
+				// strcpy(rootQuery, fileQuery);
+				// strcat(fileNameCopy, fileName);
+				// strcat(rootQuery, fileNameCopy);
 
 				//uploadFile("/cooltext.txt", root, "..", cooltext.txt);
 				// uploadFile(fileQuery, root, fileData, fileName);
@@ -295,7 +270,7 @@ void connection_handler(void* socket_desc) {
 				// puts(fileData);
 				// printf("%d\n", strcmp(openFile(rootQuery, root), fileData));
 
-				char HTMLResponse[100];
+				// char HTMLResponse[100];
 				// puts(rootQuery);
 				// if(strcmp(openFile(rootQuery, root), fileData) == 0) {
 				// 	sprintf(HTMLResponse, "File %s created successfully at path %s", fileName, rootQuery);
@@ -355,3 +330,30 @@ void getFileContents(char actualpath[], char fileContents[]) {
 	}
 }
 
+void requestTypeString(char* requestString, int httpStatus) {
+	switch(httpStatus) {
+		case 200:
+			sprintf(requestString, "OK");
+			break;
+		case 400:
+			sprintf(requestString, "Bad Request");
+			break;
+		case 404:
+			sprintf(requestString, "Not Found");
+			break;
+		default:
+			sprintf(requestString, "Unknown");
+	}
+}
+
+void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
+	//Time stuff may be implemented later.
+
+	// time_t t = time(NULL);
+	// struct tm tm = *localtime(&t);
+	// printf("now: %d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+	char RTString[10];
+	requestTypeString(RTString, httpStatus);
+	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/html\nConnection: Closed\n\n<html><body><p>%s</p></body><html>", httpStatus, RTString, strlen(message) + 29, message);
+	puts(httpResponse);
+}
