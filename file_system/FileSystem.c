@@ -78,7 +78,9 @@ int uploadFile(char *path, Directory *root, char *fileData, char *fileName) {
     newFile->name = (char *) malloc(strlen(fileName));
     strcpy(newFile->name, fileName);
     // newFile->name = fileName;
-    newFile->data = fileData;
+    newFile->data = (char *) malloc(strlen(fileData));
+    // newFile->data = fileData;
+    strcpy(newFile->data, fileData);
     FileNode *newFileNode = malloc(sizeof(FileNode));
     newFileNode->data = newFile;
     newFileNode->next = NULL;
