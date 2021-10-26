@@ -236,40 +236,52 @@ void connection_handler(void* socket_desc) {
 				}
 			}
 			else if(strcmp(requestType, "POST") == 0) { //post request
-				char* fileQuery = strtok(NULL, "\n");
+				char* requestBody = strtok(NULL, "\n");
+				int contentLength = 0;
 				int i = 0;
 				while(i < 10) {
-					fileQuery = strtok(NULL, "\n");
-					printf("%s\n", fileQuery);
+					if(strstr(requestBody, "Content-Length")) {
+						char* contentLengthString = strstr(requestBody, " ") + 1;
+						contentLength = atoi(contentLengthString);
+					}
+					requestBody = strtok(NULL, "\n");
+					printf("%s\n", requestBody);
 					i++;
 				}
-				// fileQuery = strtok(NULL, "\n");
-				// char* dataQuery = strtok(NULL, " ");
-				// char* fileData = replaceWord(strstr(dataQuery, "fileData=") + 9, "%20", " ");
-				// char* fileName = strtok(strstr(dataQuery, "fileName=") + 9, "&");
-				printf("FILEQUERY: %s\n", fileQuery);			
-				// printf("%s\n", fileData);
-				// printf("%s\n", fileName);	
-				// printf("%d\n", strlen(fileQuery));
-				// char rootQuery[100];
-				// char fileNameCopy[strlen(fileName)]; 
-				// if(strlen(fileQuery) > 1) { //Are we adding to sub-directory?
-				// 	fileNameCopy[0] = '/';
-				// 	puts(fileQuery);
-				// 	if(getDirectoryFromPath(fileQuery, root) == NULL) {
-				// 		makeDirectory(fileQuery + 1, root);
-				// 	}
+				
+				printf("REQUEST BODY BEGINNING: %s\n", requestBody);
+				printf("REQUEST TYPE %s\n", requestType);
+				while(i < 10) {
+					requestBody = strtok(NULL, "\n");
+					printf("%s\n", requestBody);
+					i++;
+				}
+				
+				char* requestType = strstr(requestBody, "<html>") ? "html" : "text"; //Should change to content-type in future
+				char* fileEnding = strcmp(requestType, "html") == 0 ? ".html" : ".txt";
+				char* fileName = "cat";
+				char* rootPointer = "../root/";
+				char completeFileName[strlen(rootPointer) + strlen(fileName) + strlen(fileEnding)];
+				strcpy(completeFileName, rootPointer);
+				strcat(completeFileName, fileName);
+				strcat(completeFileName, fileEnding);
+				puts(completeFileName);
+				FILE *fp;
+				fp = fopen(completeFileName, "w");
+				puts(requestBody);
+				char fileContents[contentLength + 1];
+				strcat(fileContents, requestBody);
+				puts(fileContents);
+				fputs(fileContents, fp);
+				// while(strcmp(requestBody, "\n") != 0) {
+				// 	puts(requestBody);
+					
+				// 	requestBody = strtok(NULL, "\n");
 				// }
-				// strcpy(rootQuery, fileQuery);
-				// strcat(fileNameCopy, fileName);
-				// strcat(rootQuery, fileNameCopy);
+				// puts(fileContents);
+				fclose(fp);
 
-				//uploadFile("/cooltext.txt", root, "..", cooltext.txt);
-				// uploadFile(fileQuery, root, fileData, fileName);
-				// puts(openFile(rootQuery, root));
-				// puts(fileData);
-				// printf("%d\n", strcmp(openFile(rootQuery, root), fileData));
-
+				
 				// char HTMLResponse[100];
 				// puts(rootQuery);
 				// if(strcmp(openFile(rootQuery, root), fileData) == 0) {
@@ -357,3 +369,4 @@ void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
 	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/html\nConnection: Closed\n\n<html><body><p>%s</p></body><html>", httpStatus, RTString, strlen(message) + 29, message);
 	puts(httpResponse);
 }
+
