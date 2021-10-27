@@ -28,7 +28,8 @@
 */
 
 void connection_handler(void* socket_desc);
-void getRealPath(char buffer[], char actualpath[]);
+void createDirectories(char* path);
+void getRealPath(char buffer[], char actualpath[], char* requestType);
 void getFileContents(char actualpath[], char fileContents[]);
 void createHTTPResponse(char *httpResponse, int httpStatus, char* message);
 void requestTypeString(char* requestString, int httpStatus);
@@ -50,12 +51,13 @@ typedef struct FileSem {
 FileSem fileSemaphores[200];
 int numFiles = 0;
 
-void addFileSem(char *filePath) {
+FileSem* addFileSem(char *filePath) {
 	FileSem newFileSem;
 	newFileSem.filePath = (char *) malloc(strlen(filePath));
 	strcpy(newFileSem.filePath, filePath);
 	fileSemaphores[numFiles] = newFileSem;
 	numFiles ++;
+	return &newFileSem;
 }
 
 FileSem* getFileSem(char *target) {
@@ -204,19 +206,20 @@ void connection_handler(void* socket_desc) {
 	while((bytesread = read(client_sock, buffer+msgsize, sizeof(buffer)-msgsize-1)) > 0) {	
 		msgsize += bytesread;
 		if(msgsize > 4095) break;
-		buffer[msgsize-1] = 0;
+		buffer[msgsize+1] = 0;
 		// Send the message back to client
 		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
-		//HTTP Parsing
 		char* requestType = strtok(buffer, " "); // GET, POST, DELETE
 		char* path;
-		char fileContents[10000];
-
-
 		if(requestType != NULL) {
 			path = strtok(NULL, " ");
+			char fileContents[10000];
 			if(strcmp(requestType, "GET") == 0) { //get request
-				getRealPath(path, actualpath); //realpath gets stored to actualpath
+				char* rootPointer = "../root";
+				char relativePath[strlen(rootPointer) + strlen(path)];
+				strcpy(relativePath, rootPointer);
+				strcat(relativePath, path);
+				getRealPath(relativePath, actualpath, requestType); //realpath gets stored to actualpath
 				FileSem* file_sem = getFileSem(actualpath);
 				if(file_sem == NULL) {
 					createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
@@ -235,7 +238,7 @@ void connection_handler(void* socket_desc) {
 					sem_post(&(file_sem->mutex));
 				}
 			}
-			else if(strcmp(requestType, "POST") == 0) { //post request
+			else if(strcmp(requestType, "PUT") == 0) { //PUT request
 				char* requestBody = strtok(NULL, "\n");
 				int contentLength = 0;
 				int i = 0;
@@ -249,71 +252,96 @@ void connection_handler(void* socket_desc) {
 					i++;
 				}
 				
-				printf("REQUEST BODY BEGINNING: %s\n", requestBody);
+				printf("REQUEST BODY: %s\n", requestBody);
 				printf("REQUEST TYPE %s\n", requestType);
-				while(i < 10) {
-					requestBody = strtok(NULL, "\n");
-					printf("%s\n", requestBody);
-					i++;
-				}
+				printf("CONTENT LENGTH: %d\n", contentLength);
 				
-				char* requestType = strstr(requestBody, "<html>") ? "html" : "text"; //Should change to content-type in future
-				char* fileEnding = strcmp(requestType, "html") == 0 ? ".html" : ".txt";
-				char* fileName = "cat";
-				char* rootPointer = "../root/";
-				char completeFileName[strlen(rootPointer) + strlen(fileName) + strlen(fileEnding)];
-				strcpy(completeFileName, rootPointer);
-				strcat(completeFileName, fileName);
-				strcat(completeFileName, fileEnding);
-				puts(completeFileName);
+				char* rootPointer = "../root";
+				char relativePath[strlen(rootPointer) + strlen(path)];
+				
+				strcpy(relativePath, rootPointer);
+				strcat(relativePath, path);
+
+				
+				puts(relativePath);
+				createDirectories(relativePath);
+				getRealPath(relativePath, actualpath, requestType);
+
+				FileSem* fileSem;
+				if(getFileSem(actualpath) == NULL) {
+					printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
+					fileSem = addFileSem(actualpath);
+				}
+				else {
+					fileSem = getFileSem(actualpath);
+				}
+
+				sem_wait(&(fileSem->mutex));
+
 				FILE *fp;
-				fp = fopen(completeFileName, "w");
-				puts(requestBody);
-				char fileContents[contentLength + 1];
-				strcat(fileContents, requestBody);
-				puts(fileContents);
+				puts(actualpath);
+				fp = fopen(actualpath, "w");
+				// puts(requestBody);
+				char fileContents[contentLength + 2];
+				memcpy(fileContents, requestBody, strlen(requestBody) + 1);
+				fileContents[strlen(requestBody) + 2] = '\0';
+				// fileContents[-1]
+				// puts(fileContents);
 				fputs(fileContents, fp);
 				// while(strcmp(requestBody, "\n") != 0) {
 				// 	puts(requestBody);
-					
+				
 				// 	requestBody = strtok(NULL, "\n");
 				// }
 				// puts(fileContents);
 				fclose(fp);
+				sem_post(&(fileSem->mutex));
 
 				
-				// char HTMLResponse[100];
+				char HTMLResponse[PATH_MAX + 1];
 				// puts(rootQuery);
 				// if(strcmp(openFile(rootQuery, root), fileData) == 0) {
-				// 	sprintf(HTMLResponse, "File %s created successfully at path %s", fileName, rootQuery);
+				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
 				// 	createHTTPResponse(HTTPResponse, 200, HTMLResponse);
 				// 	printf("==================\n");
 				// 	printf("%s\n", openFile(rootQuery, root));
 				// }
 				// else {
-				// 	sprintf(HTMLResponse, "File %s not created successfully. Something went wrong.", fileName);
+				// sprintf(HTMLResponse, "File %s not created successfully. Something went wrong.", fileName);
 				// 	createHTTPResponse(HTTPResponse, 400, HTMLResponse);
 				// }
 				// printf("RESPONSE:\n%s\n", HTTPResponse);
 				// send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+				send(client_sock, HTMLResponse, strlen(HTTPResponse), 0);
 			}
 			else if(strcmp(requestType, "DELETE") == 0) { //delete request
 
 			}
 			else {
-				// send(client_sock, hello, strlen(hello), 0);
+				send(client_sock, "Error", 5, 0);
 			}
 		}
 	}
 }
 
-void getRealPath(char* path, char* actualpath) {
-	char relativePath[strlen(path) + 9];
-	char* rootPointer = "../root";
-	memcpy(relativePath, rootPointer, 9);
-	strcat(relativePath, path);
+void createDirectories(char* path) {
+	char directoryString[strlen(path) + 10];
+	puts("PATH:");
+	puts(path);
+	char* lastDot = strrchr(path, '/');
+	puts(lastDot);
+	strncpy(directoryString, path, strlen(path) - strlen(lastDot));
+	directoryString[strlen(path) - strlen(lastDot) + 1] = '\0';
+	char mkdirString[strlen(directoryString)]; 
+	sprintf(mkdirString, "mkdir -p %s", directoryString);
+	puts(mkdirString);
+	system(mkdirString);
+}
+
+void getRealPath(char* relativePath, char* actualpath, char* requestType) {
 	printf("Relative path is: %s\n", relativePath);
-	if(realpath(relativePath, actualpath) == NULL) {
+	if(realpath(relativePath, actualpath) == NULL && strcmp(requestType, "GET") == 0) {
+		puts(actualpath);
 		printf("ERROR: %s is an incorrect path.\n", relativePath);
 		exit(1);
 	}
