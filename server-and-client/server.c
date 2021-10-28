@@ -29,7 +29,7 @@
 
 void connection_handler(void* socket_desc);
 void createDirectories(char* path);
-void getRealPath(char buffer[], char actualpath[], char* requestType);
+int getRealPath(char buffer[], char actualpath[], char* requestType); //realpath gets stored to actualpath
 void getFileContents(char actualpath[], char fileContents[]);
 void createHTTPResponse(char *httpResponse, int httpStatus, char* message);
 void requestTypeString(char* requestString, int httpStatus);
@@ -219,23 +219,29 @@ void connection_handler(void* socket_desc) {
 				char relativePath[strlen(rootPointer) + strlen(path)];
 				strcpy(relativePath, rootPointer);
 				strcat(relativePath, path);
-				getRealPath(relativePath, actualpath, requestType); //realpath gets stored to actualpath
-				FileSem* file_sem = getFileSem(actualpath);
-				if(file_sem == NULL) {
-					createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+				if(!getRealPath(relativePath, actualpath, requestType)) { //If path is incorrect
+					createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-				}
+					printf("HIT");
+				} 
 				else {
-					sem_wait(&(file_sem->mutex));
-					getFileContents(actualpath, fileContents);
-					if(fileContents == NULL) {
-						createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.");
+					FileSem* file_sem = getFileSem(actualpath);
+					if(file_sem == NULL) { // If no file sem is found to associate with file at path
+						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
 					else {
-						createHTTPResponse(HTTPResponse, 200, fileContents);
+						sem_wait(&(file_sem->mutex));
+						getFileContents(actualpath, fileContents);
+						if(fileContents == NULL) {
+							createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.");
+						}
+						else {
+							createHTTPResponse(HTTPResponse, 200, fileContents);
+						}
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+						sem_post(&(file_sem->mutex));
 					}
-					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-					sem_post(&(file_sem->mutex));
 				}
 			}
 			else if(strcmp(requestType, "PUT") == 0) { //PUT request
@@ -258,22 +264,17 @@ void connection_handler(void* socket_desc) {
 				
 				char* rootPointer = "../root";
 				char relativePath[strlen(rootPointer) + strlen(path)];
-				
 				strcpy(relativePath, rootPointer);
 				strcat(relativePath, path);
 
-				
 				puts(relativePath);
 				createDirectories(relativePath);
 				getRealPath(relativePath, actualpath, requestType);
 
 				FileSem* fileSem;
-				if(getFileSem(actualpath) == NULL) {
+				if((fileSem = getFileSem(actualpath)) == NULL) {
 					printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
 					fileSem = addFileSem(actualpath);
-				}
-				else {
-					fileSem = getFileSem(actualpath);
 				}
 
 				sem_wait(&(fileSem->mutex));
@@ -281,19 +282,10 @@ void connection_handler(void* socket_desc) {
 				FILE *fp;
 				puts(actualpath);
 				fp = fopen(actualpath, "w");
-				// puts(requestBody);
 				char fileContents[contentLength + 2];
 				memcpy(fileContents, requestBody, strlen(requestBody) + 1);
 				fileContents[strlen(requestBody) + 2] = '\0';
-				// fileContents[-1]
-				// puts(fileContents);
 				fputs(fileContents, fp);
-				// while(strcmp(requestBody, "\n") != 0) {
-				// 	puts(requestBody);
-				
-				// 	requestBody = strtok(NULL, "\n");
-				// }
-				// puts(fileContents);
 				fclose(fp);
 				sem_post(&(fileSem->mutex));
 
@@ -302,7 +294,7 @@ void connection_handler(void* socket_desc) {
 				// puts(rootQuery);
 				// if(strcmp(openFile(rootQuery, root), fileData) == 0) {
 				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
-				// 	createHTTPResponse(HTTPResponse, 200, HTMLResponse);
+				createHTTPResponse(HTTPResponse, 200, HTMLResponse);
 				// 	printf("==================\n");
 				// 	printf("%s\n", openFile(rootQuery, root));
 				// }
@@ -338,15 +330,15 @@ void createDirectories(char* path) {
 	system(mkdirString);
 }
 
-void getRealPath(char* relativePath, char* actualpath, char* requestType) {
+int getRealPath(char* relativePath, char* actualpath, char* requestType) {
 	printf("Relative path is: %s\n", relativePath);
-	if(realpath(relativePath, actualpath) == NULL && strcmp(requestType, "GET") == 0) {
-		puts(actualpath);
+	if(realpath(relativePath, actualpath) == NULL && (strcmp(requestType, "GET") == 0 || strcmp(requestType, "DELETE") == 0)) {
 		printf("ERROR: %s is an incorrect path.\n", relativePath);
-		exit(1);
+		return 0;
 	}
 	else {
 		printf("Path is actually: %s\n", actualpath);
+		return 1;
 	}
 } 
 
@@ -394,7 +386,7 @@ void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
 	// printf("now: %d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	char RTString[10];
 	requestTypeString(RTString, httpStatus);
-	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/html\nConnection: Closed\n\n<html><body><p>%s</p></body><html>", httpStatus, RTString, strlen(message) + 29, message);
+	sprintf(httpResponse, "HTTP/1.1 %d %s\r\nDate: Mon, 27 Jul 2009 12:28:53 GMT\r\nServer: Apache/2.2.14 (Win32)\r\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\r\nContent-Length: %d\r\nContent-Type: text/html\r\nConnection: Closed\n\n<html><body><p>%s</p></body><html>", httpStatus, RTString, strlen(message) + 29, message);
 	puts(httpResponse);
 }
 
