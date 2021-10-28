@@ -46,15 +46,19 @@ void requestTypeString(char* requestString, int httpStatus);
 typedef struct FileSem {
 	char *filePath;
 	sem_t mutex;
+	int numWaiting;
 } FileSem;
 
 FileSem fileSemaphores[200];
 int numFiles = 0;
 
+
 FileSem* addFileSem(char *filePath) {
 	FileSem newFileSem;
 	newFileSem.filePath = (char *) malloc(strlen(filePath));
 	strcpy(newFileSem.filePath, filePath);
+	sem_init(&(newFileSem.mutex), 0, 1);
+	newFileSem.numWaiting = 0;
 	fileSemaphores[numFiles] = newFileSem;
 	numFiles ++;
 	return &newFileSem;
@@ -68,6 +72,45 @@ FileSem* getFileSem(char *target) {
 		}
 	}
 	return NULL;
+}
+
+/*
+	wraps the sem_wait function
+	returns 0 if the wait is over and the file is available
+	returns 1 if the file is not available
+		(if the file was deleted by one of the prior clients)
+*/
+int semWait(FileSem* fileSem) {
+	fileSem->numWaiting ++;
+	sem_wait(&(fileSem->mutex));
+	fileSem->numWaiting --;
+	if (&(fileSemaphores[numFiles].filePath) == &(fileSem->filePath)) {
+		return 1;
+	}
+	return 0;
+}
+
+int removeFileSem(char *target) {
+	FileSem toRemove;
+	int removedInd = -1;
+	for (int i = 0; i < numFiles; i ++){
+		FileSem curr = fileSemaphores[i];
+		if (! strcmp(curr.filePath, target)) {
+			toRemove = curr;
+			removedInd = i;
+			break;
+		}
+	}
+	if (removedInd == -1) {
+		return 1;
+	}
+	fileSemaphores[numFiles] = toRemove;
+	free(toRemove.filePath);	// must free this bc it was dynamically allocated
+	for (int i = removedInd; i < numFiles - 1; i ++) {
+		fileSemaphores[i] = fileSemaphores[i + 1];
+	}
+	numFiles --;
+	return 0;
 }
 
 // Originally made by Geeks for Geeks: https://www.geeksforgeeks.org/c-program-replace-word-text-another-given-word/
@@ -226,16 +269,22 @@ void connection_handler(void* socket_desc) {
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 				}
 				else {
-					sem_wait(&(file_sem->mutex));
-					getFileContents(actualpath, fileContents);
-					if(fileContents == NULL) {
-						createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.");
+					// sem_wait(&(file_sem->mutex));
+					if (semWait(file_sem) == 1) {
+						printf("THE REQUESTED FILE DOES NOT EXIST");
+						// send the 404 html file
 					}
 					else {
-						createHTTPResponse(HTTPResponse, 200, fileContents);
+						getFileContents(actualpath, fileContents);
+						if(fileContents == NULL) {
+							createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.");
+						}
+						else {
+							createHTTPResponse(HTTPResponse, 200, fileContents);
+						}
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+						sem_post(&(file_sem->mutex));
 					}
-					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-					sem_post(&(file_sem->mutex));
 				}
 			}
 			else if(strcmp(requestType, "PUT") == 0) { //PUT request
@@ -277,6 +326,7 @@ void connection_handler(void* socket_desc) {
 				}
 
 				sem_wait(&(fileSem->mutex));
+				
 
 				FILE *fp;
 				puts(actualpath);
@@ -315,7 +365,37 @@ void connection_handler(void* socket_desc) {
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
 			else if(strcmp(requestType, "DELETE") == 0) { //delete request
-
+				char* rootPointer = "../root";
+				char relativePath[strlen(rootPointer) + strlen(path)];
+				strcpy(relativePath, rootPointer);
+				strcat(relativePath, path);
+				getRealPath(relativePath, actualpath, requestType);
+				// get the path to the file to delete
+				// check that the file actaully exists
+				FileSem* fileSem = getFileSem(actualpath);
+				if (fileSem == NULL) {
+					printf("THE REQUESTED FILE DOES NOT EXIST");
+					// send the 404 html file
+				}
+				else {
+					if (semWait(fileSem) == 1) {
+						printf("THE REQUESTED FILE DOES NOT EXIST");
+						// send the 404 html file
+					}
+					else {
+						remove(actualpath);
+						removeFileSem(actualpath);
+						FileSem removed = fileSemaphores[numFiles];
+						// call sem_post for each waiting process
+						// they will each then return the 404 file to their client
+						while (removed.numWaiting > 0) {
+							sem_post(&(removed.mutex));
+						}
+						// destroy the semaphore
+						sem_destroy(&(removed.mutex));
+					}
+					
+				}
 			}
 			else {
 				send(client_sock, "Error", 5, 0);
