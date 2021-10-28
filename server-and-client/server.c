@@ -302,7 +302,7 @@ void connection_handler(void* socket_desc) {
 				// puts(rootQuery);
 				// if(strcmp(openFile(rootQuery, root), fileData) == 0) {
 				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
-				// 	createHTTPResponse(HTTPResponse, 200, HTMLResponse);
+				createHTTPResponse(HTTPResponse, 200, HTMLResponse);
 				// 	printf("==================\n");
 				// 	printf("%s\n", openFile(rootQuery, root));
 				// }
@@ -312,7 +312,7 @@ void connection_handler(void* socket_desc) {
 				// }
 				// printf("RESPONSE:\n%s\n", HTTPResponse);
 				// send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-				send(client_sock, HTMLResponse, strlen(HTTPResponse), 0);
+				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
 			else if(strcmp(requestType, "DELETE") == 0) { //delete request
 
