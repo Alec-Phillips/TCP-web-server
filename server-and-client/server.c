@@ -173,11 +173,14 @@ int main(int argc, char *argv[])
 			perror("Couldn't make new thread.");
 			exit(1);
 		}
+		puts("left handler function");
 
 		pthread_join(sniffer_thread, NULL);
+		puts("thread deleted");
 		
 		// Begin receiving HTTP requests (either from the browser, Postman, or client)
 		close(client_sock);
+		puts("client closed");
 		fflush(stdout);
 		puts("Waiting for incoming connections...");
 
@@ -202,11 +205,19 @@ void connection_handler(void* socket_desc) {
 	int client_sock = *(int*)socket_desc;
 	int msgsize = 0;
 	size_t bytesread;
-	
+
+	// stuff needed for timeout logic with client socket
+	fd_set readfds, masterfds;
+	struct timeval timeout;
+	timeout.tv_sec = 2; // set the timeout to 2 seconds
+  	timeout.tv_usec = 0;
+	FD_ZERO(&masterfds);
+   	FD_SET(client_sock, &masterfds);
+
+	memcpy(&readfds, &masterfds, sizeof(fd_set));
+
 	while((bytesread = read(client_sock, buffer+msgsize, sizeof(buffer)-msgsize-1)) > 0) {	
-		msgsize += bytesread;
-		if(msgsize > 4095) break;
-		buffer[msgsize+1] = 0;
+		puts("at top of while loop");
 		// Send the message back to client
 		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
 		char* requestType = strtok(buffer, " "); // GET, POST, DELETE
@@ -285,34 +296,17 @@ void connection_handler(void* socket_desc) {
 				char fileContents[contentLength + 2];
 				memcpy(fileContents, requestBody, strlen(requestBody) + 1);
 				fileContents[strlen(requestBody) + 2] = '\0';
-				// fileContents[-1]
-				// puts(fileContents);
 				fputs(fileContents, fp);
-				// while(strcmp(requestBody, "\n") != 0) {
-				// 	puts(requestBody);
-				
-				// 	requestBody = strtok(NULL, "\n");
-				// }
-				// puts(fileContents);
 				fclose(fp);
 				sem_post(&(fileSem->mutex));
 
 				
 				char HTMLResponse[PATH_MAX + 1];
-				// puts(rootQuery);
-				// if(strcmp(openFile(rootQuery, root), fileData) == 0) {
 				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
 				createHTTPResponse(HTTPResponse, 200, HTMLResponse);
-				// 	printf("==================\n");
-				// 	printf("%s\n", openFile(rootQuery, root));
-				// }
-				// else {
-				// sprintf(HTMLResponse, "File %s not created successfully. Something went wrong.", fileName);
-				// 	createHTTPResponse(HTTPResponse, 400, HTMLResponse);
-				// }
-				// printf("RESPONSE:\n%s\n", HTTPResponse);
-				// send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+				puts("about to send response to client");
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+				puts("sent response to client");
 			}
 			else if(strcmp(requestType, "DELETE") == 0) { //delete request
 
@@ -321,7 +315,23 @@ void connection_handler(void* socket_desc) {
 				send(client_sock, "Error", 5, 0);
 			}
 		}
+		puts("at end of while loop");
+		// timeout after 2 seconds if nothing received from client
+		if (select(client_sock+1, &readfds, NULL, NULL, &timeout) < 0) {
+				perror("on select");
+				exit(1);
+		}
+
+		if (FD_ISSET(client_sock, &readfds)) {
+			// read from the socket
+			continue;
+		}
+		else {
+			// the socket timedout
+			break;
+		}
 	}
+	puts("at end of the function");
 }
 
 void createDirectories(char* path) {
@@ -394,7 +404,7 @@ void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
 	// printf("now: %d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	char RTString[10];
 	requestTypeString(RTString, httpStatus);
-	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/html\nConnection: Closed\n\n<html><body><p>%s</p></body><html>", httpStatus, RTString, strlen(message) + 29, message);
+	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/plain\nConnection: Closed\n\n%s", httpStatus, RTString, strlen(message), message);
 	puts(httpResponse);
 }
 
