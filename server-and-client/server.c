@@ -217,6 +217,9 @@ void connection_handler(void* socket_desc) {
 	memcpy(&readfds, &masterfds, sizeof(fd_set));
 
 	while((bytesread = read(client_sock, buffer+msgsize, sizeof(buffer)-msgsize-1)) > 0) {	
+		msgsize += bytesread;
+		if(msgsize > 4095) break;
+		buffer[msgsize+1] = 0;
 		puts("at top of while loop");
 		// Send the message back to client
 		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
