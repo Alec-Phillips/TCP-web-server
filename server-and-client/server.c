@@ -168,7 +168,7 @@ void connection_handler(void* socket_desc) {
 		puts("at top of while loop");
 		// Send the message back to client
 		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
-
+		
 		char* requestType = strtok(buffer, " "); // GET, POST, DELETE
 		char* path; // will store path requested
 		if(requestType != NULL) {
@@ -212,8 +212,12 @@ void connection_handler(void* socket_desc) {
 						char* contentLengthString = strstr(requestBody, " ") + 1;
 						contentLength = atoi(contentLengthString);
 					}
+					// if(strstr(requestBody, "Connection")) {
+					// 	char* contentLengthString = strstr(requestBody, " ") + 1;
+					// }
 					requestBody = strtok(NULL, "\n");
 				}
+				requestBody = strtok(NULL, "\n");
 				if(requestBody == NULL) requestBody = ""; //allowance for empty files if request body is empty
 				
 				printf("REQUEST BODY: %s\n", requestBody);
@@ -240,6 +244,9 @@ void connection_handler(void* socket_desc) {
 				puts(actualpath);
 				fp = fopen(actualpath, "w");
 				char fileContents[contentLength + 2];
+				printf("Content Length: %d\n", contentLength);
+				puts(fileContents);
+				puts(requestBody);
 				memcpy(fileContents, requestBody, strlen(requestBody) + 1);
 				fileContents[strlen(requestBody) + 2] = '\0';
 				fputs(fileContents, fp);
@@ -247,6 +254,8 @@ void connection_handler(void* socket_desc) {
 				sem_post(&(fileSem->mutex));				
 				char HTMLResponse[PATH_MAX + 1];
 				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
+				puts("FILE CONTENTS: ");
+				getFileContents(actualpath, fileContents);
 				createHTTPResponse(HTTPResponse, 200, HTMLResponse);
 				puts("about to send response to client");
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
@@ -280,10 +289,6 @@ void connection_handler(void* socket_desc) {
 		}
 	}
 	puts("at end of the function");
-	if(bytesread == 0) {
-		puts("Client disconnected");
-		fflush(stdout);
-	}
 	free(socket_desc);	
 }
 	
@@ -326,7 +331,7 @@ void getFileContents(char actualpath[], char fileContents[]) {
 		int c;
 		int i = 0;
 		
-		while ((c = fgetc(fp)) != EOF){
+		while ((c = getc(fp)) != EOF){
 			fileContents[i] = c;
 			i++;
 		}
