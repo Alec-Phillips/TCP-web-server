@@ -235,8 +235,8 @@ void connection_handler(void* socket_desc) {
 					}
 					// sem_wait(&(file_sem->mutex));
 					if (semWait(file_sem) == 1) {
-						printf("THE REQUESTED FILE DOES NOT EXIST");
-						// send the 404 html file
+						createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST");
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
 					else {
 						getFileContents(actualpath, fileContents);
@@ -310,7 +310,6 @@ void connection_handler(void* socket_desc) {
 				puts("sent response to client");
 			}
 			else if(strcmp(requestType, "DELETE") == 0) { //delete request
-				printf("deleting");
 				char* rootPointer = "../root";
 				char relativePath[strlen(rootPointer) + strlen(path)];
 				strcpy(relativePath, rootPointer);
@@ -319,34 +318,32 @@ void connection_handler(void* socket_desc) {
 				// get the path to the file to delete
 				// check that the file actaully exists
 				FileSem* fileSem = getFileSem(actualpath);
-				if (fileSem == NULL) {
-					printf("THE REQUESTED FILE DOES NOT EXIST");
-					// send the 404 html file
+				if(fileSem == NULL) {
+					createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.");
+					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
+				}
+				else if (semWait(fileSem) == 1) {
+					createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.");
+					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 				}
 				else {
-					if (semWait(fileSem) == 1) {
-						printf("THE REQUESTED FILE DOES NOT EXIST");
-						// send the 404 html file
+					remove(actualpath);
+					removeFileSem(actualpath);
+					FileSem removed = fileSemaphores[numFiles];
+					// call sem_post for each waiting process
+					// they will each then return the 404 file to their client
+					while (removed.numWaiting > 0) {
+						sem_post(&(removed.mutex));
 					}
-					else {
-						remove(actualpath);
-						removeFileSem(actualpath);
-						FileSem removed = fileSemaphores[numFiles];
-						// call sem_post for each waiting process
-						// they will each then return the 404 file to their client
-						while (removed.numWaiting > 0) {
-							sem_post(&(removed.mutex));
-						}
-						// destroy the semaphore
-						sem_destroy(&(removed.mutex));
-						char HTMLResponse[PATH_MAX + 1];
-						sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
-						createHTTPResponse(HTTPResponse, 200, HTMLResponse);
-						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-						puts("sent response to client");
-					}
-					
+					// destroy the semaphore
+					sem_destroy(&(removed.mutex));
+					char HTMLResponse[PATH_MAX + 1];
+					sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
+					createHTTPResponse(HTTPResponse, 200, HTMLResponse);
+					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+					puts("sent response to client");
 				}
+					
 			}
 			else {
 				createHTTPResponse(HTTPResponse, 501, "That request type isn't implemented. The available request types are GET, PUT, and DELETE.");
