@@ -310,7 +310,7 @@ void connection_handler(void* socket_desc) {
 				puts("sent response to client");
 			}
 			else if(strcmp(requestType, "DELETE") == 0) { //delete request
-				puts('hi');
+				printf("deleting");
 				char* rootPointer = "../root";
 				char relativePath[strlen(rootPointer) + strlen(path)];
 				strcpy(relativePath, rootPointer);
@@ -339,6 +339,11 @@ void connection_handler(void* socket_desc) {
 						}
 						// destroy the semaphore
 						sem_destroy(&(removed.mutex));
+						char HTMLResponse[PATH_MAX + 1];
+						sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
+						createHTTPResponse(HTTPResponse, 200, HTMLResponse);
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+						puts("sent response to client");
 					}
 					
 				}
