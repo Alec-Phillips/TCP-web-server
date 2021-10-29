@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 	*/
 	int server_socket, client_sock, size_of_addr, *new_sock;
 	struct sockaddr_in server, client;
-	int server_backlog = 10;
+	int server_backlog = 100;
 	int server_port = atoi(argv[1]);
 
 	//Create socket
