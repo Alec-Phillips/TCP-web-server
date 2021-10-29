@@ -234,7 +234,7 @@ void connection_handler(void* socket_desc) {
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
 					// sem_wait(&(file_sem->mutex));
-					if (semWait(file_sem) == 1) {
+					else if (semWait(file_sem) == 1) { 
 						createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST");
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
