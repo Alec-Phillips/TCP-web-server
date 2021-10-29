@@ -206,16 +206,15 @@ void connection_handler(void* socket_desc) {
 			else if(strcmp(requestType, "PUT") == 0) { //PUT request
 				char* requestBody = strtok(NULL, "\n");
 				int contentLength = 0;
-				int i = 0;
-				while(i < 10) {
+				while(strcmp(requestBody, "\r") != 0 && requestBody != NULL) {
+					// puts(requestBody);
 					if(strstr(requestBody, "Content-Length")) {
 						char* contentLengthString = strstr(requestBody, " ") + 1;
 						contentLength = atoi(contentLengthString);
 					}
 					requestBody = strtok(NULL, "\n");
-					printf("%s\n", requestBody);
-					i++;
 				}
+				if(requestBody == NULL) requestBody = ""; //allowance for empty files if request body is empty
 				
 				printf("REQUEST BODY: %s\n", requestBody);
 				printf("REQUEST TYPE %s\n", requestType);
