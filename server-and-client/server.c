@@ -29,15 +29,11 @@
 
 void connection_handler(void* socket_desc);
 void createDirectories(char* path);
-void getRealPath(char buffer[], char actualpath[], char* requestType);
+int getRealPath(char buffer[], char actualpath[], char* requestType); //realpath gets stored to actualpath
 void getFileContents(char actualpath[], char fileContents[]);
 void createHTTPResponse(char *httpResponse, int httpStatus, char* message);
 void requestTypeString(char* requestString, int httpStatus);
-
-/*
-	HTTP Response Creator
-*/
-
+char* replaceWord(const char* s, const char* oldW, const char* newW);
 
 
 // Here is our global array (eventually hashmap, hopefully)
@@ -152,7 +148,6 @@ char* replaceWord(const char* s, const char* oldW,
     return result;
 }
 
-
 int main(int argc, char *argv[])
 {
 	/*
@@ -166,7 +161,7 @@ int main(int argc, char *argv[])
 	*/
 	int server_socket, client_sock, size_of_addr, *new_sock;
 	struct sockaddr_in server, client;
-	int server_backlog = 10;
+	int server_backlog = 100;
 	int server_port = atoi(argv[1]);
 
 	//Create socket
@@ -216,59 +211,67 @@ int main(int argc, char *argv[])
 			perror("Couldn't make new thread.");
 			exit(1);
 		}
+		puts("left handler function");
 
 		pthread_join(sniffer_thread, NULL);
+		puts("thread deleted");
 		
-		// Begin receiving HTTP requests (either from the browser, Postman, or client)
 		close(client_sock);
+		puts("client closed");
 		fflush(stdout);
 		puts("Waiting for incoming connections...");
 
-
-		// if(read_size == 0)
-		// {
-		// 	puts("Client disconnected");
-		// 	fflush(stdout);
-		// }
-		// else if(read_size == -1)
-		// {
-		// 	perror("recv failed");
-		// }
 	}
 	return 0;
 }
 
 void connection_handler(void* socket_desc) {
-	char buffer[4096];
+	char buffer[4096]; 
 	char actualpath[PATH_MAX + 1];
 	char HTTPResponse[4092];
 	int client_sock = *(int*)socket_desc;
 	int msgsize = 0;
 	size_t bytesread;
-	
+
+	// stuff needed for timeout logic with client socket
+	fd_set readfds, masterfds;
+	struct timeval timeout;
+	timeout.tv_sec = 2; // set the timeout to 2 seconds
+  	timeout.tv_usec = 0;
+	FD_ZERO(&masterfds);
+   	FD_SET(client_sock, &masterfds);
+
+	memcpy(&readfds, &masterfds, sizeof(fd_set));
+
 	while((bytesread = read(client_sock, buffer+msgsize, sizeof(buffer)-msgsize-1)) > 0) {	
 		msgsize += bytesread;
 		if(msgsize > 4095) break;
 		buffer[msgsize+1] = 0;
+		puts("at top of while loop");
 		// Send the message back to client
 		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
+
 		char* requestType = strtok(buffer, " "); // GET, POST, DELETE
-		char* path;
+		char* path; // will store path requested
 		if(requestType != NULL) {
 			path = strtok(NULL, " ");
 			char fileContents[10000];
-			if(strcmp(requestType, "GET") == 0) { //get request
+			if(strcmp(requestType, "GET") == 0) { //GET Request
 				char* rootPointer = "../root";
 				char relativePath[strlen(rootPointer) + strlen(path)];
 				strcpy(relativePath, rootPointer);
 				strcat(relativePath, path);
-				getRealPath(relativePath, actualpath, requestType); //realpath gets stored to actualpath
-				FileSem* file_sem = getFileSem(actualpath);
-				if(file_sem == NULL) {
-					createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+				if(!getRealPath(relativePath, actualpath, requestType)) { //If path is incorrect
+					createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-				}
+				} 
 				else {
+
+					FileSem* file_sem = getFileSem(actualpath);
+					if(file_sem == NULL) { // If no file sem is found to associate with file at path
+						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+					}
 					// sem_wait(&(file_sem->mutex));
 					if (semWait(file_sem) == 1) {
 						printf("THE REQUESTED FILE DOES NOT EXIST");
@@ -290,16 +293,15 @@ void connection_handler(void* socket_desc) {
 			else if(strcmp(requestType, "PUT") == 0) { //PUT request
 				char* requestBody = strtok(NULL, "\n");
 				int contentLength = 0;
-				int i = 0;
-				while(i < 10) {
+				while(strcmp(requestBody, "\r") != 0 && requestBody != NULL) {
+					// puts(requestBody);
 					if(strstr(requestBody, "Content-Length")) {
 						char* contentLengthString = strstr(requestBody, " ") + 1;
 						contentLength = atoi(contentLengthString);
 					}
 					requestBody = strtok(NULL, "\n");
-					printf("%s\n", requestBody);
-					i++;
 				}
+				if(requestBody == NULL) requestBody = ""; //allowance for empty files if request body is empty
 				
 				printf("REQUEST BODY: %s\n", requestBody);
 				printf("REQUEST TYPE %s\n", requestType);
@@ -307,62 +309,35 @@ void connection_handler(void* socket_desc) {
 				
 				char* rootPointer = "../root";
 				char relativePath[strlen(rootPointer) + strlen(path)];
-				
 				strcpy(relativePath, rootPointer);
 				strcat(relativePath, path);
 
-				
 				puts(relativePath);
 				createDirectories(relativePath);
 				getRealPath(relativePath, actualpath, requestType);
 
 				FileSem* fileSem;
-				if(getFileSem(actualpath) == NULL) {
+				if((fileSem = getFileSem(actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
 					printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
 					fileSem = addFileSem(actualpath);
 				}
-				else {
-					fileSem = getFileSem(actualpath);
-				}
 
 				sem_wait(&(fileSem->mutex));
-				
-
 				FILE *fp;
 				puts(actualpath);
 				fp = fopen(actualpath, "w");
-				// puts(requestBody);
 				char fileContents[contentLength + 2];
 				memcpy(fileContents, requestBody, strlen(requestBody) + 1);
 				fileContents[strlen(requestBody) + 2] = '\0';
-				// fileContents[-1]
-				// puts(fileContents);
 				fputs(fileContents, fp);
-				// while(strcmp(requestBody, "\n") != 0) {
-				// 	puts(requestBody);
-				
-				// 	requestBody = strtok(NULL, "\n");
-				// }
-				// puts(fileContents);
 				fclose(fp);
-				sem_post(&(fileSem->mutex));
-
-				
+				sem_post(&(fileSem->mutex));				
 				char HTMLResponse[PATH_MAX + 1];
-				// puts(rootQuery);
-				// if(strcmp(openFile(rootQuery, root), fileData) == 0) {
 				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
 				createHTTPResponse(HTTPResponse, 200, HTMLResponse);
-				// 	printf("==================\n");
-				// 	printf("%s\n", openFile(rootQuery, root));
-				// }
-				// else {
-				// sprintf(HTMLResponse, "File %s not created successfully. Something went wrong.", fileName);
-				// 	createHTTPResponse(HTTPResponse, 400, HTMLResponse);
-				// }
-				// printf("RESPONSE:\n%s\n", HTTPResponse);
-				// send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+				puts("about to send response to client");
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+				puts("sent response to client");
 			}
 			else if(strcmp(requestType, "DELETE") == 0) { //delete request
 				char* rootPointer = "../root";
@@ -398,11 +373,38 @@ void connection_handler(void* socket_desc) {
 				}
 			}
 			else {
-				send(client_sock, "Error", 5, 0);
+				createHTTPResponse(HTTPResponse, 501, "That request type isn't implemented. The available request types are GET, PUT, and DELETE.");
+				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
 		}
+		else {
+			createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.");
+			send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+		}
+		puts("at end of while loop");
+		// timeout after 2 seconds if nothing received from client
+		if (select(client_sock+1, &readfds, NULL, NULL, &timeout) < 0) {
+				perror("on select");
+				exit(1);
+		}
+		if (FD_ISSET(client_sock, &readfds)) {
+			// read from the socket
+			continue;
+		}
+		else {
+			// the socket timedout
+			break;
+		}
 	}
+	puts("at end of the function");
+	if(bytesread == 0) {
+		puts("Client disconnected");
+		fflush(stdout);
+	}
+	free(socket_desc);	
 }
+	
+
 
 void createDirectories(char* path) {
 	char directoryString[strlen(path) + 10];
@@ -418,15 +420,15 @@ void createDirectories(char* path) {
 	system(mkdirString);
 }
 
-void getRealPath(char* relativePath, char* actualpath, char* requestType) {
+int getRealPath(char* relativePath, char* actualpath, char* requestType) {
 	printf("Relative path is: %s\n", relativePath);
-	if(realpath(relativePath, actualpath) == NULL && strcmp(requestType, "GET") == 0) {
-		puts(actualpath);
+	if(realpath(relativePath, actualpath) == NULL && (strcmp(requestType, "GET") == 0 || strcmp(requestType, "DELETE") == 0)) {
 		printf("ERROR: %s is an incorrect path.\n", relativePath);
-		exit(1);
+		return 0;
 	}
 	else {
 		printf("Path is actually: %s\n", actualpath);
+		return 1;
 	}
 } 
 
@@ -440,12 +442,13 @@ void getFileContents(char actualpath[], char fileContents[]) {
 	else {
 		int c;
 		int i = 0;
-		while ((c = getc(fp)) != EOF){
-			// putchar(c);
+		
+		while ((c = fgetc(fp)) != EOF){
 			fileContents[i] = c;
 			i++;
 		}
-		fileContents[i] = "\0";
+		fileContents[i] = 0;
+		puts(fileContents);
 		fclose(fp);
 	}
 }
@@ -461,8 +464,12 @@ void requestTypeString(char* requestString, int httpStatus) {
 		case 404:
 			sprintf(requestString, "Not Found");
 			break;
+		case 501:
+			sprintf(requestString, "Internal Server Error");
+			break;
 		default:
 			sprintf(requestString, "Unknown");
+			break;
 	}
 }
 
@@ -474,7 +481,46 @@ void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
 	// printf("now: %d-%02d-%02d %02d:%02d:%02d\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 	char RTString[10];
 	requestTypeString(RTString, httpStatus);
-	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/html\nConnection: Closed\n\n<html><body><p>%s</p></body><html>", httpStatus, RTString, strlen(message) + 29, message);
+	sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/plain\nConnection: Closed\n\n%s", httpStatus, RTString, strlen(message), message);
 	puts(httpResponse);
 }
 
+
+// Originally made by Geeks for Geeks: https://www.geeksforgeeks.org/c-program-replace-word-text-another-given-word/
+char* replaceWord(const char* s, const char* oldW,
+                  const char* newW)
+{
+    char* result;
+    int i, cnt = 0;
+    int newWlen = strlen(newW);
+    int oldWlen = strlen(oldW);
+  
+    // Counting the number of times old word
+    // occur in the string
+    for (i = 0; s[i] != '\0'; i++) {
+        if (strstr(&s[i], oldW) == &s[i]) {
+            cnt++;
+  
+            // Jumping to index after the old word.
+            i += oldWlen - 1;
+        }
+    }
+  
+    // Making new string of enough length
+    result = (char*)malloc(i + cnt * (newWlen - oldWlen) + 1);
+  
+    i = 0;
+    while (*s) {
+        // compare the substring with the result
+        if (strstr(s, oldW) == s) {
+            strcpy(&result[i], newW);
+            i += newWlen;
+            s += oldWlen;
+        }
+        else
+            result[i++] = *s++;
+    }
+  
+    result[i] = '\0';
+    return result;
+}
