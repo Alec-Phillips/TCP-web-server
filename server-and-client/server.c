@@ -29,15 +29,11 @@
 
 void connection_handler(void* socket_desc);
 void createDirectories(char* path);
-void getRealPath(char buffer[], char actualpath[], char* requestType);
+int getRealPath(char buffer[], char actualpath[], char* requestType); //realpath gets stored to actualpath
 void getFileContents(char actualpath[], char fileContents[]);
 void createHTTPResponse(char *httpResponse, int httpStatus, char* message);
 void requestTypeString(char* requestString, int httpStatus);
-
-/*
-	HTTP Response Creator
-*/
-
+char* replaceWord(const char* s, const char* oldW, const char* newW);
 
 
 // Here is our global array (eventually hashmap, hopefully)
@@ -69,46 +65,6 @@ FileSem* getFileSem(char *target) {
 	}
 	return NULL;
 }
-
-// Originally made by Geeks for Geeks: https://www.geeksforgeeks.org/c-program-replace-word-text-another-given-word/
-char* replaceWord(const char* s, const char* oldW,
-                  const char* newW)
-{
-    char* result;
-    int i, cnt = 0;
-    int newWlen = strlen(newW);
-    int oldWlen = strlen(oldW);
-  
-    // Counting the number of times old word
-    // occur in the string
-    for (i = 0; s[i] != '\0'; i++) {
-        if (strstr(&s[i], oldW) == &s[i]) {
-            cnt++;
-  
-            // Jumping to index after the old word.
-            i += oldWlen - 1;
-        }
-    }
-  
-    // Making new string of enough length
-    result = (char*)malloc(i + cnt * (newWlen - oldWlen) + 1);
-  
-    i = 0;
-    while (*s) {
-        // compare the substring with the result
-        if (strstr(s, oldW) == s) {
-            strcpy(&result[i], newW);
-            i += newWlen;
-            s += oldWlen;
-        }
-        else
-            result[i++] = *s++;
-    }
-  
-    result[i] = '\0';
-    return result;
-}
-
 
 int main(int argc, char *argv[])
 {
@@ -178,28 +134,17 @@ int main(int argc, char *argv[])
 		pthread_join(sniffer_thread, NULL);
 		puts("thread deleted");
 		
-		// Begin receiving HTTP requests (either from the browser, Postman, or client)
 		close(client_sock);
 		puts("client closed");
 		fflush(stdout);
 		puts("Waiting for incoming connections...");
 
-
-		// if(read_size == 0)
-		// {
-		// 	puts("Client disconnected");
-		// 	fflush(stdout);
-		// }
-		// else if(read_size == -1)
-		// {
-		// 	perror("recv failed");
-		// }
 	}
 	return 0;
 }
 
 void connection_handler(void* socket_desc) {
-	char buffer[4096];
+	char buffer[4096]; 
 	char actualpath[PATH_MAX + 1];
 	char HTTPResponse[4092];
 	int client_sock = *(int*)socket_desc;
@@ -223,33 +168,39 @@ void connection_handler(void* socket_desc) {
 		puts("at top of while loop");
 		// Send the message back to client
 		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
+
 		char* requestType = strtok(buffer, " "); // GET, POST, DELETE
-		char* path;
+		char* path; // will store path requested
 		if(requestType != NULL) {
 			path = strtok(NULL, " ");
 			char fileContents[10000];
-			if(strcmp(requestType, "GET") == 0) { //get request
+			if(strcmp(requestType, "GET") == 0) { //GET Request
 				char* rootPointer = "../root";
 				char relativePath[strlen(rootPointer) + strlen(path)];
 				strcpy(relativePath, rootPointer);
 				strcat(relativePath, path);
-				getRealPath(relativePath, actualpath, requestType); //realpath gets stored to actualpath
-				FileSem* file_sem = getFileSem(actualpath);
-				if(file_sem == NULL) {
-					createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+				if(!getRealPath(relativePath, actualpath, requestType)) { //If path is incorrect
+					createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-				}
+				} 
 				else {
-					sem_wait(&(file_sem->mutex));
-					getFileContents(actualpath, fileContents);
-					if(fileContents == NULL) {
-						createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.");
+					FileSem* file_sem = getFileSem(actualpath);
+					if(file_sem == NULL) { // If no file sem is found to associate with file at path
+						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?");
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
 					else {
-						createHTTPResponse(HTTPResponse, 200, fileContents);
+						sem_wait(&(file_sem->mutex));
+						getFileContents(actualpath, fileContents);
+						if(fileContents == NULL) { //If the file is found, but there are no file contents.
+							createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.");
+						}
+						else {
+							createHTTPResponse(HTTPResponse, 200, fileContents);
+						}
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+						sem_post(&(file_sem->mutex));
 					}
-					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-					sem_post(&(file_sem->mutex));
 				}
 			}
 			else if(strcmp(requestType, "PUT") == 0) { //PUT request
@@ -272,38 +223,29 @@ void connection_handler(void* socket_desc) {
 				
 				char* rootPointer = "../root";
 				char relativePath[strlen(rootPointer) + strlen(path)];
-				
 				strcpy(relativePath, rootPointer);
 				strcat(relativePath, path);
 
-				
 				puts(relativePath);
 				createDirectories(relativePath);
 				getRealPath(relativePath, actualpath, requestType);
 
 				FileSem* fileSem;
-				if(getFileSem(actualpath) == NULL) {
+				if((fileSem = getFileSem(actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
 					printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
 					fileSem = addFileSem(actualpath);
 				}
-				else {
-					fileSem = getFileSem(actualpath);
-				}
 
 				sem_wait(&(fileSem->mutex));
-
 				FILE *fp;
 				puts(actualpath);
 				fp = fopen(actualpath, "w");
-				// puts(requestBody);
 				char fileContents[contentLength + 2];
 				memcpy(fileContents, requestBody, strlen(requestBody) + 1);
 				fileContents[strlen(requestBody) + 2] = '\0';
 				fputs(fileContents, fp);
 				fclose(fp);
-				sem_post(&(fileSem->mutex));
-
-				
+				sem_post(&(fileSem->mutex));				
 				char HTMLResponse[PATH_MAX + 1];
 				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
 				createHTTPResponse(HTTPResponse, 200, HTMLResponse);
@@ -315,8 +257,13 @@ void connection_handler(void* socket_desc) {
 
 			}
 			else {
-				send(client_sock, "Error", 5, 0);
+				createHTTPResponse(HTTPResponse, 501, "That request type isn't implemented. The available request types are GET, PUT, and DELETE.");
+				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
+		}
+		else {
+			createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.");
+			send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 		}
 		puts("at end of while loop");
 		// timeout after 2 seconds if nothing received from client
@@ -324,7 +271,6 @@ void connection_handler(void* socket_desc) {
 				perror("on select");
 				exit(1);
 		}
-
 		if (FD_ISSET(client_sock, &readfds)) {
 			// read from the socket
 			continue;
@@ -335,7 +281,14 @@ void connection_handler(void* socket_desc) {
 		}
 	}
 	puts("at end of the function");
+	if(bytesread == 0) {
+		puts("Client disconnected");
+		fflush(stdout);
+	}
+	free(socket_desc);	
 }
+	
+
 
 void createDirectories(char* path) {
 	char directoryString[strlen(path) + 10];
@@ -351,15 +304,15 @@ void createDirectories(char* path) {
 	system(mkdirString);
 }
 
-void getRealPath(char* relativePath, char* actualpath, char* requestType) {
+int getRealPath(char* relativePath, char* actualpath, char* requestType) {
 	printf("Relative path is: %s\n", relativePath);
-	if(realpath(relativePath, actualpath) == NULL && strcmp(requestType, "GET") == 0) {
-		puts(actualpath);
+	if(realpath(relativePath, actualpath) == NULL && (strcmp(requestType, "GET") == 0 || strcmp(requestType, "DELETE") == 0)) {
 		printf("ERROR: %s is an incorrect path.\n", relativePath);
-		exit(1);
+		return 0;
 	}
 	else {
 		printf("Path is actually: %s\n", actualpath);
+		return 1;
 	}
 } 
 
@@ -373,12 +326,13 @@ void getFileContents(char actualpath[], char fileContents[]) {
 	else {
 		int c;
 		int i = 0;
-		while ((c = getc(fp)) != EOF){
-			// putchar(c);
+		
+		while ((c = fgetc(fp)) != EOF){
 			fileContents[i] = c;
 			i++;
 		}
-		fileContents[i] = "\0";
+		fileContents[i] = 0;
+		puts(fileContents);
 		fclose(fp);
 	}
 }
@@ -394,8 +348,12 @@ void requestTypeString(char* requestString, int httpStatus) {
 		case 404:
 			sprintf(requestString, "Not Found");
 			break;
+		case 501:
+			sprintf(requestString, "Internal Server Error");
+			break;
 		default:
 			sprintf(requestString, "Unknown");
+			break;
 	}
 }
 
@@ -411,3 +369,42 @@ void createHTTPResponse(char *httpResponse, int httpStatus, char* message) {
 	puts(httpResponse);
 }
 
+
+// Originally made by Geeks for Geeks: https://www.geeksforgeeks.org/c-program-replace-word-text-another-given-word/
+char* replaceWord(const char* s, const char* oldW,
+                  const char* newW)
+{
+    char* result;
+    int i, cnt = 0;
+    int newWlen = strlen(newW);
+    int oldWlen = strlen(oldW);
+  
+    // Counting the number of times old word
+    // occur in the string
+    for (i = 0; s[i] != '\0'; i++) {
+        if (strstr(&s[i], oldW) == &s[i]) {
+            cnt++;
+  
+            // Jumping to index after the old word.
+            i += oldWlen - 1;
+        }
+    }
+  
+    // Making new string of enough length
+    result = (char*)malloc(i + cnt * (newWlen - oldWlen) + 1);
+  
+    i = 0;
+    while (*s) {
+        // compare the substring with the result
+        if (strstr(s, oldW) == s) {
+            strcpy(&result[i], newW);
+            i += newWlen;
+            s += oldWlen;
+        }
+        else
+            result[i++] = *s++;
+    }
+  
+    result[i] = '\0';
+    return result;
+}
