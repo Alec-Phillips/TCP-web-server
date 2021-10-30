@@ -178,7 +178,7 @@ void connection_handler(void* socket_desc) {
 		char *main_save_ptr;
 		char* requestType = strtok_r(buffer, " ", &main_save_ptr); // GET, POST, DELETE
 		char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
-		char* http_version = strtok_r(NULL, "\r\n", &main_save_ptr);
+		char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
 		printf("buffer is: \n%s\n", buffer);
 		printf("request type is %s\n", requestType);
 		printf("path is %s\n", path);
@@ -187,28 +187,26 @@ void connection_handler(void* socket_desc) {
 		char* requestBody;
 		bool is_persistent_connection = false;
 
-		char* header = strtok_r(NULL, "\r\n", &main_save_ptr);
-		printf("first header is %s\n", header);
-		while(header != NULL) {
+		char* header_key;
+		char* header_val;
+		// strtok_r can only use 1 char as a delimiter, so we have to use pointer 
+		// addition parse the request properly
+		while(1) {
 			char *tmp_save_ptr;
-			char* header_key = strtok_r(header, ":", &tmp_save_ptr);
-			char* header_val = strtok_r(NULL, "\r\n", &tmp_save_ptr);
+			header_key = strtok_r(NULL, ":", &main_save_ptr);
+			header_val = strtok_r(NULL, "\n", &main_save_ptr);
 			printf("key is %s, which is pretty cool\n", header_key);
 			if (header_val == NULL) {
-				printf("breaking out of parsing");
-				break; // header will be the entire request body
+				printf("breaking out of parsing\n");
+				break; // header_key will be the entire request body
 			}
-			printf("val is %s\n", header_val);
-
+			printf("val is %s\n", header_val+1);
 			if (strcmp(header_key, "Content-Length") == 0) contentLength = atoi(header_val+1); // need + 1 since there's a " " after colon
 			else if (strcmp(header_key, "Connection") == 0) {
-				if ((strcmp(header_val+1, "keep-alive") == 0)) is_persistent_connection = true;
+				if ((strcmp(header_val+1, "keep-alive\r") == 0)) is_persistent_connection = true;
 			}
-			
-			header = strtok_r(NULL, "\r\n", &main_save_ptr);
 		}
-		printf("header is %s\n", header);
-		requestBody = header;
+		requestBody = header_key+2; // need a + 2 since there's a \r\n at the start of the remaining text
 
 		if(requestType != NULL) {
 			// path = strtok(NULL, " ");
