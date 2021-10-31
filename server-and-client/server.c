@@ -264,7 +264,6 @@ void connection_handler(void* socket_desc) {
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 				} 
 				else {
-
 					FileSem* file_sem = getFileSem(actualpath);
 					if(file_sem == NULL) { // If no file sem is found to associate with file at path
 						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?", is_persistent_connection);
@@ -272,7 +271,7 @@ void connection_handler(void* socket_desc) {
 					}
 					// sem_wait(&(file_sem->mutex));
 					else if (semWait(file_sem) == 1) { 
-						createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST");
+						createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST", is_persistent_connection);
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
 					else {
@@ -338,11 +337,11 @@ void connection_handler(void* socket_desc) {
 				// check that the file actaully exists
 				FileSem* fileSem = getFileSem(actualpath);
 				if(fileSem == NULL) {
-					createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.");
+					createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.", is_persistent_connection);
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 				}
 				else if (semWait(fileSem) == 1) {
-					createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.");
+					createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.", is_persistent_connection);
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 				}
 				else {
@@ -358,7 +357,7 @@ void connection_handler(void* socket_desc) {
 					sem_destroy(&(removed.mutex));
 					char HTMLResponse[PATH_MAX + 1];
 					sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
-					createHTTPResponse(HTTPResponse, 200, HTMLResponse);
+					createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection);
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					puts("sent response to client");
 				}
