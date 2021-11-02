@@ -193,11 +193,11 @@ void connection_handler(void* socket_desc) {
 	int client_sock = *(int*)socket_desc;
 	int msgsize = 0;
 	size_t bytesread;
-	int num_transactions = 0;
+	int num_transactions = 1;
 	char *buffer_start = buffer;
 
 	// Keep-Alive header vals. Source: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Keep-Alive
-	int max_transactions = 1000;
+	int max_transactions = 5;
 	struct timeval timeout;
 	timeout.tv_sec = 5; // set the timeout to 5 seconds
   	timeout.tv_usec = 0;
@@ -216,13 +216,15 @@ void connection_handler(void* socket_desc) {
 		buffer[bytesread+1] = 0;
 		msgsize += bytesread;
 		char *main_save_ptr = buffer;
-		// parse through all requests placed into buffer. Start at buffer and end when main_save_ptr is at buffer+msgsize
-		while (main_save_ptr != buffer + msgsize) {
+		// parse through all requests placed into buffer. Start at buffer and end when main_save_ptr is at buffer+bytesread
+		while (main_save_ptr != buffer + bytesread) {
+			printf("entering nested while loop\n");
+			printf("first char is %c\n", *(main_save_ptr+1));
 			// Send the message back to client
 			printf("REQUEST IS:\n%s\n", buffer);
 			// extract header values from request
 			
-			char* requestType = strtok_r(buffer, " ", &main_save_ptr); // GET, POST, DELETE
+			char* requestType = strtok_r(NULL, " ", &main_save_ptr); // GET, POST, DELETE
 			char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
 			char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
 			printf("buffer is: \n%s\n", buffer);
@@ -384,6 +386,7 @@ void connection_handler(void* socket_desc) {
 				createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.", is_persistent_connection);
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
+			printf("at end of smallest while loop. Transaction count: %d/%d\n", num_transactions, max_transactions);
 			// if closed connection, exit out of thread handler function
 			if (is_persistent_connection == false) {
 				free(socket_desc);	
@@ -398,11 +401,11 @@ void connection_handler(void* socket_desc) {
 			}
 			if (FD_ISSET(client_sock, &readfds)) {
 				// read from the socket
-				num_transactions++;
 				if (num_transactions > max_transactions) {
 					free(socket_desc); 
 					return;
 				}
+				num_transactions++;
 				continue;
 			}
 			else {
@@ -410,7 +413,6 @@ void connection_handler(void* socket_desc) {
 				free(socket_desc); 
 				return;
 			}
-			puts("at end of smallest while loop");
 		}
 		puts("at end of while loop");
 	}
