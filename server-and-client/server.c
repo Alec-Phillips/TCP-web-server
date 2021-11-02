@@ -219,15 +219,15 @@ void connection_handler(void* socket_desc) {
 		// parse through all requests placed into buffer. Start at buffer and end when main_save_ptr is at buffer+bytesread
 		while (main_save_ptr != buffer + bytesread) {
 			printf("entering nested while loop\n");
-			printf("first char is %c\n", *(main_save_ptr+1));
+			printf("first char is %c\n", *(main_save_ptr));
 			// Send the message back to client
-			printf("REQUEST IS:\n%s\n", buffer);
+			printf("REQUEST IS:\n%s\n", main_save_ptr);
 			// extract header values from request
 			
 			char* requestType = strtok_r(NULL, " ", &main_save_ptr); // GET, POST, DELETE
 			char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
 			char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
-			printf("buffer is: \n%s\n", buffer);
+			printf("buffer is: \n%s\n", main_save_ptr);
 			printf("request type is %s\n", requestType);
 			printf("path is %s\n", path);
 			printf("version is %s\n", http_version);
@@ -264,6 +264,8 @@ void connection_handler(void* socket_desc) {
 			// requestBody = header_key+2; // need a + 2 since there's a \r\n at the start of the remaining text
 			strncpy(requestBody, main_save_ptr, contentLength);
 			printf("request body is %s\n", requestBody);
+
+			main_save_ptr += contentLength;
 
 			if(requestType != NULL) {
 				// path = strtok(NULL, " ");
