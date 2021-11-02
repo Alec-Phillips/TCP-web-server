@@ -194,10 +194,11 @@ void connection_handler(void* socket_desc) {
 	int msgsize = 0;
 	size_t bytesread;
 	int num_transactions = 1;
-	char *buffer_start = buffer;
+	char* request_start;
+	int spillover_offset = 0;
 
 	// Keep-Alive header vals. Source: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Keep-Alive
-	int max_transactions = 5;
+	int max_transactions = 1000;
 	struct timeval timeout;
 	timeout.tv_sec = 5; // set the timeout to 5 seconds
   	timeout.tv_usec = 0;
@@ -211,13 +212,15 @@ void connection_handler(void* socket_desc) {
 
 	// read, at max, the size of buffer many bytes from the socket buffer into the userspace buffer
 	// combine first request we're gonna parse with the leftover request of last read() cycle (is there's something to work with)
-	while((bytesread = read(client_sock, buffer, sizeof(buffer)-1)) > 0) {	
+	
+	while((bytesread = read(client_sock, buffer+spillover_offset, sizeof(buffer)-1-spillover_offset)) > 0) {	
 		puts("at top of while loop");
 		buffer[bytesread+1] = 0;
 		msgsize += bytesread;
 		char *main_save_ptr = buffer;
 		// parse through all requests placed into buffer. Start at buffer and end when main_save_ptr is at buffer+bytesread
 		while (main_save_ptr != buffer + bytesread) {
+			request_start = main_save_ptr;
 			printf("entering nested while loop\n");
 			printf("first char is %c\n", *(main_save_ptr));
 			// Send the message back to client
@@ -226,7 +229,9 @@ void connection_handler(void* socket_desc) {
 			
 			char* requestType = strtok_r(NULL, " ", &main_save_ptr); // GET, POST, DELETE
 			char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
+			if (path == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
 			char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
+			if (http_version == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
 			printf("buffer is: \n%s\n", main_save_ptr);
 			printf("request type is %s\n", requestType);
 			printf("path is %s\n", path);
@@ -237,18 +242,18 @@ void connection_handler(void* socket_desc) {
 			// strtok_r can only use 1 char as a delimiter, so we have to use pointer 
 			// addition parse the request properly
 			char* curr_header = strtok_r(NULL, "\n", &main_save_ptr);
+			if (curr_header == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
 			char* header_key;
 			char* header_val;
+			bool incomplete_header_section = false;
 			 // curr_header marks the \r\n in between the header and body. Use Content-Length (if it exists) to go to end of body
 			while(strlen(curr_header) > 1) {
 				printf("curr header is %d\n", strlen(curr_header));
-				// no headers left to parse
-				if (strlen(curr_header) == 1) break;
-				
 				// still headers left to parse! 
 				char *tmp_save_ptr;
 				header_key = strtok_r(curr_header, ":", &tmp_save_ptr);
 				header_val = strtok_r(NULL, "\r", &tmp_save_ptr);
+				if (header_val == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); incomplete_header_section = true; break;}
 				printf("key is %s, which is pretty cool\n", header_key);
 				printf("val is %s\n", header_val+1);
 				if (strcmp(header_key, "Content-Length") == 0) contentLength = atoi(header_val+1); // need + 1 since there's a " " after colon
@@ -257,6 +262,10 @@ void connection_handler(void* socket_desc) {
 				}
 				curr_header = strtok_r(NULL, "\n", &main_save_ptr);
 			}
+			// finish fragmented buffer checks
+			if (incomplete_header_section == true) break;
+			if (request_start + contentLength > buffer + 4095) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
+
 			printf("main save ptr is %d, bytesread is %d, max index is %d\n", main_save_ptr, buffer+bytesread, buffer+4096);
 			// seems to be able to copy an empty string into a size 0 char array successfully for GET requests?
 			char* requestBody[contentLength];
@@ -422,7 +431,16 @@ void connection_handler(void* socket_desc) {
 	free(socket_desc);	
 }
 	
-
+int reconcile_fragmented_request(char* buffer, char* request_start) {
+	// fill start of buffer with chars from request_start until the end of the buffer. Then return the spillover offset for the buffer
+	int last_buffer_index = buffer + 4095;
+	int spillover_offset = 0;
+	while (request_start < last_buffer_index) {
+		*(buffer+spillover_offset) = *request_start;
+		request_start++;
+	}
+	return spillover_offset;
+}
 
 void createDirectories(char* path) {
 	char directoryString[strlen(path) + 10];
