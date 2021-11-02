@@ -27,6 +27,7 @@
 	https://www.binarytides.com/server-client-example-c-sockets-linux/
 */
 
+int reconcile_fragmented_request(char* buffer, char* request_start);
 void connection_handler(void* socket_desc);
 void createDirectories(char* path);
 int getRealPath(char buffer[], char actualpath[], char* requestType); //realpath gets stored to actualpath
@@ -187,13 +188,12 @@ int main(int argc, char *argv[])
 }
 
 void connection_handler(void* socket_desc) {
-	char buffer[4096]; 
+	char buffer[100000]; 
 	char actualpath[PATH_MAX + 1];
 	char HTTPResponse[4092];
 	int client_sock = *(int*)socket_desc;
-	int msgsize = 0;
 	size_t bytesread;
-	int num_transactions = 1;
+	int num_transactions = 0;
 	char* request_start;
 	int spillover_offset = 0;
 
@@ -216,7 +216,6 @@ void connection_handler(void* socket_desc) {
 	while((bytesread = read(client_sock, buffer+spillover_offset, sizeof(buffer)-1-spillover_offset)) > 0) {	
 		puts("at top of while loop");
 		buffer[bytesread+1] = 0;
-		msgsize += bytesread;
 		char *main_save_ptr = buffer;
 		// parse through all requests placed into buffer. Start at buffer and end when main_save_ptr is at buffer+bytesread
 		while (main_save_ptr != buffer + bytesread) {
@@ -254,7 +253,7 @@ void connection_handler(void* socket_desc) {
 				header_key = strtok_r(curr_header, ":", &tmp_save_ptr);
 				header_val = strtok_r(NULL, "\r", &tmp_save_ptr);
 				if (header_val == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); incomplete_header_section = true; break;}
-				printf("key is %s, which is pretty cool\n", header_key);
+				printf("key is %s, ", header_key);
 				printf("val is %s\n", header_val+1);
 				if (strcmp(header_key, "Content-Length") == 0) contentLength = atoi(header_val+1); // need + 1 since there's a " " after colon
 				else if (strcmp(header_key, "Connection") == 0) {
@@ -264,13 +263,13 @@ void connection_handler(void* socket_desc) {
 			}
 			// finish fragmented buffer checks
 			if (incomplete_header_section == true) break;
-			if (request_start + contentLength > buffer + 4095) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
+			if ((request_start + contentLength) > (buffer + sizeof(buffer)-1)) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
 
-			printf("main save ptr is %d, bytesread is %d, max index is %d\n", main_save_ptr, buffer+bytesread, buffer+4096);
+			printf("main save ptr is %d, bytesread is %d, max index is %d\n", main_save_ptr, buffer+bytesread, (int) (buffer+sizeof(buffer)));
+			printf("first char is %c\n", *main_save_ptr);
+			printf("content length is %d\n", contentLength);
 			// seems to be able to copy an empty string into a size 0 char array successfully for GET requests?
 			char* requestBody[contentLength];
-			printf("first char is %c\n", *main_save_ptr);
-			// requestBody = header_key+2; // need a + 2 since there's a \r\n at the start of the remaining text
 			strncpy(requestBody, main_save_ptr, contentLength);
 			printf("request body is %s\n", requestBody);
 
@@ -397,35 +396,32 @@ void connection_handler(void* socket_desc) {
 				createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.", is_persistent_connection);
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
+			// increment [num_transactions] by 1. If equal to max allowed, break out of while loop
+			num_transactions++;
 			printf("at end of smallest while loop. Transaction count: %d/%d\n", num_transactions, max_transactions);
+			if (num_transactions == max_transactions) {
+					free(socket_desc); 
+					return;
+				}
 			// if closed connection, exit out of thread handler function
 			if (is_persistent_connection == false) {
 				free(socket_desc);	
 				return;
 			}
-
-			// if persistent connection, time out after [timeout] seconds if nothing received from client
-			// increment [num_transactions] by 1. If greater than max allowed, break out of while loop
-			if (select(client_sock+1, &readfds, NULL, NULL, &timeout) < 0) {
-					perror("on select");
-					exit(1);
-			}
-			if (FD_ISSET(client_sock, &readfds)) {
-				// read from the socket
-				if (num_transactions > max_transactions) {
-					free(socket_desc); 
-					return;
-				}
-				num_transactions++;
-				continue;
-			}
-			else {
-				// the socket timedout
-				free(socket_desc); 
-				return;
-			}
 		}
 		puts("at end of while loop");
+		// if persistent connection, time out after [timeout] seconds if nothing received from client
+		if (select(client_sock+1, &readfds, NULL, NULL, &timeout) < 0) {
+			perror("on select");
+			exit(1);
+		}
+		// something still in socket buffer
+		if (FD_ISSET(client_sock, &readfds)) continue;
+		else {
+			// the socket timedout
+			free(socket_desc); 
+			return;
+		}
 	}
 	puts("at end of the function");
 	free(socket_desc);	
@@ -433,9 +429,9 @@ void connection_handler(void* socket_desc) {
 	
 int reconcile_fragmented_request(char* buffer, char* request_start) {
 	// fill start of buffer with chars from request_start until the end of the buffer. Then return the spillover offset for the buffer
-	int last_buffer_index = buffer + 4095;
+	int last_buffer_index = buffer + sizeof(buffer)-1;
 	int spillover_offset = 0;
-	while (request_start < last_buffer_index) {
+	while ((int) request_start < last_buffer_index) {
 		*(buffer+spillover_offset) = *request_start;
 		request_start++;
 	}
