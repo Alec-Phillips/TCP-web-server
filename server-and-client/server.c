@@ -257,7 +257,7 @@ void connection_handler(void* socket_desc) {
 				}
 				curr_header = strtok_r(NULL, "\n", &main_save_ptr);
 			}
-			printf("main save ptr is %d, msgsize pointer is %d, bytesread is %d\n", main_save_ptr, msgsize+buffer, buffer+bytesread);
+			printf("main save ptr is %d, bytesread is %d, max index is %d\n", main_save_ptr, buffer+bytesread, buffer+4096);
 			// seems to be able to copy an empty string into a size 0 char array successfully for GET requests?
 			char* requestBody[contentLength];
 			printf("first char is %c\n", *main_save_ptr);
