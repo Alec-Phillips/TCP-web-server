@@ -193,7 +193,8 @@ void connection_handler(void* socket_desc) {
 	int client_sock = *(int*)socket_desc;
 	int msgsize = 0;
 	size_t bytesread;
-	int num_transactions;
+	int num_transactions = 0;
+	char *buffer_start = buffer;
 
 	// Keep-Alive header vals. Source: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Keep-Alive
 	int max_transactions = 1000;
@@ -208,190 +209,210 @@ void connection_handler(void* socket_desc) {
 
 	memcpy(&readfds, &masterfds, sizeof(fd_set));
 
-	while((bytesread = read(client_sock, buffer+msgsize, sizeof(buffer)-msgsize-1)) > 0) {	
-		msgsize += bytesread;
-		if(msgsize > 4095) break;
-		buffer[msgsize+1] = 0;
-
+	// read, at max, the size of buffer many bytes from the socket buffer into the userspace buffer
+	// combine first request we're gonna parse with the leftover request of last read() cycle (is there's something to work with)
+	while((bytesread = read(client_sock, buffer, sizeof(buffer)-1)) > 0) {	
 		puts("at top of while loop");
-		// Send the message back to client
-		if(msgsize == bytesread) printf("REQUEST IS:\n%s\n", buffer);
+		buffer[bytesread+1] = 0;
+		msgsize += bytesread;
+		char *main_save_ptr = buffer;
+		// parse through all requests placed into buffer. Start at buffer and end when main_save_ptr is at buffer+msgsize
+		while (main_save_ptr != buffer + msgsize) {
+			// Send the message back to client
+			printf("REQUEST IS:\n%s\n", buffer);
+			// extract header values from request
+			
+			char* requestType = strtok_r(buffer, " ", &main_save_ptr); // GET, POST, DELETE
+			char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
+			char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
+			printf("buffer is: \n%s\n", buffer);
+			printf("request type is %s\n", requestType);
+			printf("path is %s\n", path);
+			printf("version is %s\n", http_version);
+			int contentLength = 0;
+			bool is_persistent_connection = false;
 
-		// extract header values from request
-		char *main_save_ptr;
-		char* requestType = strtok_r(buffer, " ", &main_save_ptr); // GET, POST, DELETE
-		char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
-		char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
-		printf("buffer is: \n%s\n", buffer);
-		printf("request type is %s\n", requestType);
-		printf("path is %s\n", path);
-		printf("version is %s\n", http_version);
-		int contentLength;
-		char* requestBody;
-		bool is_persistent_connection = false;
-
-		char* header_key;
-		char* header_val;
-		// strtok_r can only use 1 char as a delimiter, so we have to use pointer 
-		// addition parse the request properly
-		while(1) {
-			char *tmp_save_ptr;
-			header_key = strtok_r(NULL, ":", &main_save_ptr);
-			header_val = strtok_r(NULL, "\n", &main_save_ptr);
-			printf("key is %s, which is pretty cool\n", header_key);
-			if (header_val == NULL) {
-				printf("breaking out of parsing\n");
-				break; // header_key will be the entire request body
+			// strtok_r can only use 1 char as a delimiter, so we have to use pointer 
+			// addition parse the request properly
+			char* curr_header = strtok_r(NULL, "\n", &main_save_ptr);
+			char* header_key;
+			char* header_val;
+			 // curr_header marks the \r\n in between the header and body. Use Content-Length (if it exists) to go to end of body
+			while(strlen(curr_header) > 1) {
+				printf("curr header is %d\n", strlen(curr_header));
+				// no headers left to parse
+				if (strlen(curr_header) == 1) break;
+				
+				// still headers left to parse! 
+				char *tmp_save_ptr;
+				header_key = strtok_r(curr_header, ":", &tmp_save_ptr);
+				header_val = strtok_r(NULL, "\r", &tmp_save_ptr);
+				printf("key is %s, which is pretty cool\n", header_key);
+				printf("val is %s\n", header_val+1);
+				if (strcmp(header_key, "Content-Length") == 0) contentLength = atoi(header_val+1); // need + 1 since there's a " " after colon
+				else if (strcmp(header_key, "Connection") == 0) {
+					if ((strcmp(header_val+1, "keep-alive") == 0)) is_persistent_connection = true;
+				}
+				curr_header = strtok_r(NULL, "\n", &main_save_ptr);
 			}
-			printf("val is %s\n", header_val+1);
-			if (strcmp(header_key, "Content-Length") == 0) contentLength = atoi(header_val+1); // need + 1 since there's a " " after colon
-			else if (strcmp(header_key, "Connection") == 0) {
-				if ((strcmp(header_val+1, "keep-alive\r") == 0)) is_persistent_connection = true;
-			}
-		}
-		requestBody = header_key+2; // need a + 2 since there's a \r\n at the start of the remaining text
+			printf("main save ptr is %d, msgsize pointer is %d, bytesread is %d\n", main_save_ptr, msgsize+buffer, buffer+bytesread);
+			// seems to be able to copy an empty string into a size 0 char array successfully for GET requests?
+			char* requestBody[contentLength];
+			printf("first char is %c\n", *main_save_ptr);
+			// requestBody = header_key+2; // need a + 2 since there's a \r\n at the start of the remaining text
+			strncpy(requestBody, main_save_ptr, contentLength);
+			printf("request body is %s\n", requestBody);
 
-		if(requestType != NULL) {
-			// path = strtok(NULL, " ");
-			char fileContents[10000];
-			if(strcmp(requestType, "GET") == 0) { //GET Request
-				char* rootPointer = "../root";
-				char relativePath[strlen(rootPointer) + strlen(path)];
-				strcpy(relativePath, rootPointer);
-				strcat(relativePath, path);
-				if(!getRealPath(relativePath, actualpath, requestType)) { //If path is incorrect
-					createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection);
-					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-				} 
-				else {
-					FileSem* file_sem = getFileSem(actualpath);
-					if(file_sem == NULL) { // If no file sem is found to associate with file at path
-						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?", is_persistent_connection);
+			if(requestType != NULL) {
+				// path = strtok(NULL, " ");
+				char fileContents[10000];
+				if(strcmp(requestType, "GET") == 0) { //GET Request
+					char* rootPointer = "../root";
+					char relativePath[strlen(rootPointer) + strlen(path)];
+					strcpy(relativePath, rootPointer);
+					strcat(relativePath, path);
+					if(!getRealPath(relativePath, actualpath, requestType)) { //If path is incorrect
+						createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection);
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-					}
-					// sem_wait(&(file_sem->mutex));
-					else if (semWait(file_sem) == 1) { 
-						createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST", is_persistent_connection);
-						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-					}
+					} 
 					else {
-						getFileContents(actualpath, fileContents);
-						if(fileContents == NULL) { //If the file is found, but there are no file contents.
-							createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.", is_persistent_connection);
+						FileSem* file_sem = getFileSem(actualpath);
+						if(file_sem == NULL) { // If no file sem is found to associate with file at path
+							createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?", is_persistent_connection);
+							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+						}
+						// sem_wait(&(file_sem->mutex));
+						else if (semWait(file_sem) == 1) { 
+							createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST", is_persistent_connection);
+							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						}
 						else {
-							createHTTPResponse(HTTPResponse, 200, fileContents, is_persistent_connection);
+							getFileContents(actualpath, fileContents);
+							if(fileContents == NULL) { //If the file is found, but there are no file contents.
+								createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.", is_persistent_connection);
+							}
+							else {
+								createHTTPResponse(HTTPResponse, 200, fileContents, is_persistent_connection);
+							}
+							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+							sem_post(&(file_sem->mutex));
 						}
-						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-						sem_post(&(file_sem->mutex));
 					}
 				}
-			}
-			else if(strcmp(requestType, "PUT") == 0) { //PUT request
-				printf("REQUEST BODY: %s\n", requestBody);
-				printf("REQUEST TYPE %s\n", requestType);
-				printf("CONTENT LENGTH: %d\n", contentLength);
-				
-				char* rootPointer = "../root";
-				char relativePath[strlen(rootPointer) + strlen(path)];
-				strcpy(relativePath, rootPointer);
-				strcat(relativePath, path);
+				else if(strcmp(requestType, "PUT") == 0) { //PUT request
+					printf("REQUEST BODY: %s\n", requestBody);
+					printf("REQUEST TYPE %s\n", requestType);
+					printf("CONTENT LENGTH: %d\n", contentLength);
+					
+					char* rootPointer = "../root";
+					char relativePath[strlen(rootPointer) + strlen(path)];
+					strcpy(relativePath, rootPointer);
+					strcat(relativePath, path);
 
-				puts(relativePath);
-				createDirectories(relativePath);
-				getRealPath(relativePath, actualpath, requestType);
+					puts(relativePath);
+					createDirectories(relativePath);
+					getRealPath(relativePath, actualpath, requestType);
 
-				FileSem* fileSem;
-				if((fileSem = getFileSem(actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
-					printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
-					fileSem = addFileSem(actualpath);
-				}
-
-				sem_wait(&(fileSem->mutex));
-				FILE *fp;
-				puts(actualpath);
-				fp = fopen(actualpath, "w");
-				char fileContents[contentLength + 2];
-				printf("Content Length: %d\n", contentLength);
-				puts(fileContents);
-				puts(requestBody);
-				memcpy(fileContents, requestBody, strlen(requestBody) + 1);
-				fileContents[strlen(requestBody) + 2] = '\0';
-				fputs(fileContents, fp);
-				fclose(fp);
-				sem_post(&(fileSem->mutex));				
-				char HTMLResponse[PATH_MAX + 1];
-				sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
-				createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection);
-				puts("about to send response to client");
-				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-				puts("sent response to client");
-			}
-			else if(strcmp(requestType, "DELETE") == 0) { //delete request
-				char* rootPointer = "../root";
-				char relativePath[strlen(rootPointer) + strlen(path)];
-				strcpy(relativePath, rootPointer);
-				strcat(relativePath, path);
-				getRealPath(relativePath, actualpath, requestType);
-				// get the path to the file to delete
-				// check that the file actaully exists
-				FileSem* fileSem = getFileSem(actualpath);
-				if(fileSem == NULL) {
-					createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.", is_persistent_connection);
-					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
-				}
-				else if (semWait(fileSem) == 1) {
-					createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.", is_persistent_connection);
-					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
-				}
-				else {
-					remove(actualpath);
-					removeFileSem(actualpath);
-					FileSem removed = fileSemaphores[numFiles];
-					// call sem_post for each waiting process
-					// they will each then return the 404 file to their client
-					while (removed.numWaiting > 0) {
-						sem_post(&(removed.mutex));
+					FileSem* fileSem;
+					if((fileSem = getFileSem(actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
+						printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
+						fileSem = addFileSem(actualpath);
 					}
-					// destroy the semaphore
-					sem_destroy(&(removed.mutex));
+
+					sem_wait(&(fileSem->mutex));
+					FILE *fp;
+					puts(actualpath);
+					fp = fopen(actualpath, "w");
+					char fileContents[contentLength + 2];
+					printf("Content Length: %d\n", contentLength);
+					puts(fileContents);
+					puts(requestBody);
+					memcpy(fileContents, requestBody, strlen(requestBody) + 1);
+					fileContents[strlen(requestBody) + 2] = '\0';
+					fputs(fileContents, fp);
+					fclose(fp);
+					sem_post(&(fileSem->mutex));				
 					char HTMLResponse[PATH_MAX + 1];
-					sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
+					sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
 					createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection);
+					puts("about to send response to client");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					puts("sent response to client");
 				}
-					
+				else if(strcmp(requestType, "DELETE") == 0) { //delete request
+					char* rootPointer = "../root";
+					char relativePath[strlen(rootPointer) + strlen(path)];
+					strcpy(relativePath, rootPointer);
+					strcat(relativePath, path);
+					getRealPath(relativePath, actualpath, requestType);
+					// get the path to the file to delete
+					// check that the file actaully exists
+					FileSem* fileSem = getFileSem(actualpath);
+					if(fileSem == NULL) {
+						createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.", is_persistent_connection);
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
+					}
+					else if (semWait(fileSem) == 1) {
+						createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.", is_persistent_connection);
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
+					}
+					else {
+						remove(actualpath);
+						removeFileSem(actualpath);
+						FileSem removed = fileSemaphores[numFiles];
+						// call sem_post for each waiting process
+						// they will each then return the 404 file to their client
+						while (removed.numWaiting > 0) {
+							sem_post(&(removed.mutex));
+						}
+						// destroy the semaphore
+						sem_destroy(&(removed.mutex));
+						char HTMLResponse[PATH_MAX + 1];
+						sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
+						createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection);
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+						puts("sent response to client");
+					}
+						
+				}
+				else {
+					createHTTPResponse(HTTPResponse, 501, "That request type isn't implemented. The available request types are GET, PUT, and DELETE.", is_persistent_connection);
+					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+				}
 			}
 			else {
-				createHTTPResponse(HTTPResponse, 501, "That request type isn't implemented. The available request types are GET, PUT, and DELETE.", is_persistent_connection);
+				createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.", is_persistent_connection);
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
-		}
-		else {
-			createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.", is_persistent_connection);
-			send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+			// if closed connection, exit out of thread handler function
+			if (is_persistent_connection == false) {
+				free(socket_desc);	
+				return;
+			}
+
+			// if persistent connection, time out after [timeout] seconds if nothing received from client
+			// increment [num_transactions] by 1. If greater than max allowed, break out of while loop
+			if (select(client_sock+1, &readfds, NULL, NULL, &timeout) < 0) {
+					perror("on select");
+					exit(1);
+			}
+			if (FD_ISSET(client_sock, &readfds)) {
+				// read from the socket
+				num_transactions++;
+				if (num_transactions > max_transactions) {
+					free(socket_desc); 
+					return;
+				}
+				continue;
+			}
+			else {
+				// the socket timedout
+				free(socket_desc); 
+				return;
+			}
+			puts("at end of smallest while loop");
 		}
 		puts("at end of while loop");
-		// if closed connection, break out of while loop
-		if (is_persistent_connection == false) break;
-
-		// if persistent connection, time out after [timeout] seconds if nothing received from client
-		// increment [num_transactions] by 1. If greater than max allowed, break out of while loop
-		if (select(client_sock+1, &readfds, NULL, NULL, &timeout) < 0) {
-				perror("on select");
-				exit(1);
-		}
-		if (FD_ISSET(client_sock, &readfds)) {
-			// read from the socket
-			num_transactions++;
-			if (num_transactions > max_transactions) break;
-			continue;
-		}
-		else {
-			// the socket timedout
-			break;
-		}
 	}
 	puts("at end of the function");
 	free(socket_desc);	
