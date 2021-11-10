@@ -14,7 +14,7 @@ HashMap* setupMap(int type) {
 }
 
 int testPutGet() {
-    HashMap* map = initMap(3);
+    HashMap* map = initMap(sizeof(TestObj));
     TestObj* testObj = malloc(sizeof(TestObj));
     testObj->val = 5;
     put(map, "fp1", testObj);
@@ -48,7 +48,7 @@ int testPutGet() {
 }
 
 int testPutRepeat() {
-    HashMap* map = initMap(3);
+    HashMap* map = initMap(sizeof(TestObj));
     TestObj* testObj = malloc(sizeof(TestObj));
     testObj->val = 5;
     int putStatus;
@@ -61,7 +61,7 @@ int testPutRepeat() {
 }
 
 int testGetNull() {
-    HashMap* map = initMap(3);
+    HashMap* map = initMap(sizeof(TestObj));
     void* returned = get(map, "fake file path");
     assert (returned == NULL);
 
@@ -69,7 +69,7 @@ int testGetNull() {
 }
 
 int testDel() {
-    HashMap* map = initMap(3);
+    HashMap* map = initMap(sizeof(TestObj));
     TestObj* testObj = malloc(sizeof(TestObj));
     testObj->val = 5;
     put(map, "fp1", testObj);
@@ -158,7 +158,7 @@ int testDel() {
 
 // test with semaphores as vals, since we will be using it for this
 int semTest() {
-    HashMap* map = initMap(1);
+    HashMap* map = initMap(sizeof(sem_t));
 
     char *filePath = "root/desktop/file1.txt";
 

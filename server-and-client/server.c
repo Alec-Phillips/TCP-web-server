@@ -11,12 +11,15 @@
 #include <assert.h>
 #include <stdbool.h>
 
+#include "../hashmap/HashMap.h"
+
 /* 
 	Note:
 	- You need to change the two includes above to match where the files are for you (absolute path I believe)
 
 	Compilation command:
 	gcc server.c ../file_system/FileSystem.c ../file_system/UsefulStructures.c -Wall -o se
+	gcc server.c ../hashmap/HashMap.c -Wall -o se
 
 	Run with ./se
 */
@@ -36,14 +39,32 @@ void requestTypeString(char* requestString, int httpStatus);
 char* replaceWord(const char* s, const char* oldW, const char* newW);
 
 
-// Here is our global array (eventually hashmap, hopefully)
-// holds the filenames and their corresponding semaphore
+// -----------------------------------------------------------------------------
+
+HashMap* semMap;
 
 typedef struct FileSem {
 	char *filePath;
 	sem_t mutex;
 	int numWaiting;
 } FileSem;
+
+FileSem* initFileSem(char* filePath) {
+	FileSem newFileSem;
+	newFileSem.filePath = (char *) malloc(strlen(filePath));
+	strcpy(newFileSem.filePath, filePath);
+	sem_init(&(newFileSem.mutex), 0, 1);
+	newFileSem.numWaiting = 0;
+
+	return &newFileSem;
+}
+// -----------------------------------------------------------------------------
+
+
+// Here is our global array (eventually hashmap, hopefully)
+// holds the filenames and their corresponding semaphore
+
+
 
 FileSem fileSemaphores[200];
 int numFiles = 0;
@@ -76,15 +97,33 @@ FileSem* getFileSem(char *target) {
 	returns 1 if the file is not available
 		(if the file was deleted by one of the prior clients)
 */
-int semWait(FileSem* fileSem) {
+// int semWait(FileSem* fileSem) {
+// 	fileSem->numWaiting ++;
+// 	sem_wait(&(fileSem->mutex));
+// 	fileSem->numWaiting --;
+// 	if (&(fileSemaphores[numFiles].filePath) == &(fileSem->filePath)) {
+// 		return 1;
+// 	}
+// 	return 0;
+// }
+int semWait(FileSem* fileSem, char* filePath) {
 	fileSem->numWaiting ++;
 	sem_wait(&(fileSem->mutex));
 	fileSem->numWaiting --;
-	if (&(fileSemaphores[numFiles].filePath) == &(fileSem->filePath)) {
+	if (get(semMap, filePath) == NULL) {
 		return 1;
 	}
 	return 0;
 }
+// int semWait(sem_t* mutex, char* filePath) {
+// 	// fileSem->numWaiting ++;
+// 	sem_wait(&mutex);
+// 	// fileSem->numWaiting --;
+// 	if (get(semMap, filePath) == NULL) {
+// 		return 1;
+// 	}
+// 	return 0;
+// }
 
 int removeFileSem(char *target) {
 	FileSem toRemove;
@@ -111,6 +150,7 @@ int removeFileSem(char *target) {
 
 int main(int argc, char *argv[])
 {
+	semMap = initMap(sizeof(FileSem));
 	/*
 	server_socket: ID of socket of web server
 	client_sock: ID of socket of web client
@@ -264,13 +304,14 @@ void connection_handler(void* socket_desc) {
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 				} 
 				else {
-					FileSem* file_sem = getFileSem(actualpath);
-					if(file_sem == NULL) { // If no file sem is found to associate with file at path
+					// FileSem* file_sem = getFileSem(actualpath);
+					FileSem* fileSem = get(semMap, actualpath);
+					if(fileSem == NULL) { // If no file sem is found to associate with file at path
 						createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?", is_persistent_connection);
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
 					// sem_wait(&(file_sem->mutex));
-					else if (semWait(file_sem) == 1) { 
+					else if (semWait(fileSem, actualpath) == 1) { 
 						createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST", is_persistent_connection);
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
@@ -283,7 +324,7 @@ void connection_handler(void* socket_desc) {
 							createHTTPResponse(HTTPResponse, 200, fileContents, is_persistent_connection);
 						}
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-						sem_post(&(file_sem->mutex));
+						sem_post(&(fileSem->mutex));
 					}
 				}
 			}
@@ -302,9 +343,12 @@ void connection_handler(void* socket_desc) {
 				getRealPath(relativePath, actualpath, requestType);
 
 				FileSem* fileSem;
-				if((fileSem = getFileSem(actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
+				// sem_t* mutex;
+				if((fileSem = get(semMap, actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
 					printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
-					fileSem = addFileSem(actualpath);
+					fileSem = initFileSem(actualpath);
+					printf("\n\n%s\n\n", actualpath);
+					put(semMap, actualpath, fileSem);
 				}
 
 				sem_wait(&(fileSem->mutex));
@@ -335,26 +379,41 @@ void connection_handler(void* socket_desc) {
 				getRealPath(relativePath, actualpath, requestType);
 				// get the path to the file to delete
 				// check that the file actaully exists
-				FileSem* fileSem = getFileSem(actualpath);
+				// FileSem* fileSem = getFileSem(actualpath);
+				printf("\n\n%s\n\n", actualpath);
+				FileSem* fileSem = get(semMap, actualpath);
+				printf("%s\n", fileSem->filePath);
 				if(fileSem == NULL) {
 					createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.", is_persistent_connection);
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 				}
-				else if (semWait(fileSem) == 1) {
+				
+				else if (semWait(fileSem, actualpath) == 1) {
 					createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.", is_persistent_connection);
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 				}
 				else {
+					// puts("1");
 					remove(actualpath);
-					removeFileSem(actualpath);
-					FileSem removed = fileSemaphores[numFiles];
+					// puts("2");
+					// removeFileSem(actualpath);
+					FileSem* removed = malloc(sizeof(FileSem));
+					// puts("3");
+					memcpy(removed, fileSem, sizeof(FileSem));
+					// puts("4");
+					del(semMap, actualpath);
+					// puts("5");
+					// FileSem removed = fileSemaphores[numFiles];
+					
 					// call sem_post for each waiting process
 					// they will each then return the 404 file to their client
-					while (removed.numWaiting > 0) {
-						sem_post(&(removed.mutex));
+					printf("%s\n", removed->filePath);
+					while (removed->numWaiting > 0) {
+						sem_post(&(removed->mutex));
 					}
 					// destroy the semaphore
-					sem_destroy(&(removed.mutex));
+					sem_destroy(&(removed->mutex));
+					free(removed);
 					char HTMLResponse[PATH_MAX + 1];
 					sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
 					createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection);

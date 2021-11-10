@@ -28,32 +28,34 @@ hash(unsigned char *str)
 // -----------------------------------------------------------------------------
 
 
-KeyValPair* initKeyValPair(char* key, void* val, int typeFlag) {
+KeyValPair* initKeyValPair(char* key, void* val, size_t dataSize) {
     KeyValPair* keyVal = malloc(sizeof(KeyValPair));
     keyVal->key = malloc(strlen(key));
     strcpy(keyVal->key, key);
-    if (typeFlag == 1) {
-        keyVal->val = malloc(sizeof(sem_t));
-        memcpy(keyVal->val, val, sizeof(sem_t));
-    }
-    else if (typeFlag == 3) {
-        keyVal->val = malloc(sizeof(TestObj));
-        memcpy(keyVal->val, val, sizeof(TestObj));
-    }
-    else {
-        // this is for if we are adding a different data type
-        // we will need to malloc a different sizeof amount
-    }
+    keyVal->val = malloc(dataSize);
+    memcpy(keyVal->val, val, dataSize);
+    // if (typeFlag == 1) {
+    //     keyVal->val = malloc(sizeof(sem_t));
+    //     memcpy(keyVal->val, val, sizeof(sem_t));
+    // }
+    // else if (typeFlag == 3) {
+    //     keyVal->val = malloc(sizeof(TestObj));
+    //     memcpy(keyVal->val, val, sizeof(TestObj));
+    // }
+    // else {
+    //     // this is for if we are adding a different data type
+    //     // we will need to malloc a different sizeof amount
+    // }
     keyVal->next = NULL;
     return keyVal;
 }
 
-HashMap* initMap(int type) {
+HashMap* initMap(size_t dataSize) {
     HashMap* newMap = malloc(sizeof(HashMap));
     for (int i = 0; i < 16; i ++) {
         newMap->buckets[i] = NULL;
     }
-    newMap->type = type;
+    newMap->dataSize = dataSize;
     return newMap;
 }
 
@@ -70,7 +72,7 @@ int put(HashMap* map, char* filePath, void* data) {
     }
     unsigned long h = hash(filePath);
     int ind = h % 16;
-    KeyValPair* keyVal = initKeyValPair(filePath, data, map->type);
+    KeyValPair* keyVal = initKeyValPair(filePath, data, map->dataSize);
     
     if (map->buckets[ind] == NULL) {
         map->buckets[ind] = keyVal;
@@ -98,7 +100,6 @@ void* get(HashMap* map, char* filePath) {
     return NULL;
 }
 
-// TODO
 int del(HashMap* map, char* filePath) {
     unsigned long h = hash(filePath);
     int ind = h % 16;

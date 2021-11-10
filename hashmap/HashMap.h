@@ -11,7 +11,7 @@ typedef struct KeyValPair {
 
 typedef struct HashMap {
     struct KeyValPair* buckets[16];
-    int type;   // 1 indicates mapping to semaphores, 2 will be for queue nodes
+    size_t dataSize; // the size of the data that will be stored in this map
 } HashMap;
 
 // this is purely for testing that map works with our own user defined types
@@ -19,8 +19,8 @@ typedef struct TestObj {
     int val;
 } TestObj;
 
-KeyValPair* initKeyValPair(char* key, void* val, int typeFlag);
-HashMap* initMap(int typeFlag);
+KeyValPair* initKeyValPair(char* key, void* val, size_t dataSize);
+HashMap* initMap(size_t dataSize);
 int put(HashMap* map, char* filePath, void* data);
 void* get(HashMap* map, char* filePath);
 int del(HashMap* map, char* filePath);
