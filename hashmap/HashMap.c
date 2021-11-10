@@ -11,6 +11,7 @@
         - mapping filenames to queue nodes for the LRU cache
 */
 
+// -----------------------------------------------------------------------------
 // HASH FUNCTION:
 // SOURCE - https://stackoverflow.com/questions/7666509/hash-function-for-string
 unsigned long
@@ -24,27 +25,35 @@ hash(unsigned char *str)
 
     return hash;
 }
+// -----------------------------------------------------------------------------
 
 
-KeyValPair* initKeyValPair(char* key, void* val) {
+KeyValPair* initKeyValPair(char* key, void* val, int typeFlag) {
     KeyValPair* keyVal = malloc(sizeof(KeyValPair));
     keyVal->key = malloc(strlen(key));
     strcpy(keyVal->key, key);
-
-    // memcpy(keyVal->val, val, sizeof(sem_t));
-    
-    keyVal->val = val;  // NOT SURE IF THIS WILL WORK
-                        // 'val' may get changed and alter what is pointed to here
-                        // can ideally somehow memcopy over?
+    if (typeFlag == 1) {
+        keyVal->val = malloc(sizeof(sem_t));
+        memcpy(keyVal->val, val, sizeof(sem_t));
+    }
+    else if (typeFlag == 3) {
+        keyVal->val = malloc(sizeof(TestObj));
+        memcpy(keyVal->val, val, sizeof(TestObj));
+    }
+    else {
+        // this is for if we are adding a different data type
+        // we will need to malloc a different sizeof amount
+    }
     keyVal->next = NULL;
     return keyVal;
 }
 
-HashMap* initMap() {
+HashMap* initMap(int type) {
     HashMap* newMap = malloc(sizeof(HashMap));
     for (int i = 0; i < 16; i ++) {
         newMap->buckets[i] = NULL;
     }
+    newMap->type = type;
     return newMap;
 }
 
@@ -56,15 +65,16 @@ HashMap* initMap() {
         - insert this into the linked list for that bucket
 */
 int put(HashMap* map, char* filePath, void* data) {
+    if (get(map, filePath) != NULL) {
+        return 1;
+    }
     unsigned long h = hash(filePath);
-    // puts("1");
     int ind = h % 16;
-    KeyValPair* keyVal = initKeyValPair(filePath, data);
+    KeyValPair* keyVal = initKeyValPair(filePath, data, map->type);
     
     if (map->buckets[ind] == NULL) {
         map->buckets[ind] = keyVal;
     }
-    // puts("3");
     else {
         KeyValPair* head = map->buckets[ind];
         while (head->next != NULL) {
@@ -89,27 +99,21 @@ void* get(HashMap* map, char* filePath) {
 }
 
 // TODO
-int del(void) {
-    return 0;
-}
-
-int main(void) {
-
-    HashMap* map = initMap();
-
-    char *filePath = "root/desktop/file1.txt";
-
-    sem_t sem;
-    sem_init(&sem, 0, 1);
-
-    put(map, filePath, &sem);
-    void* val = get(map, filePath);
-
-    printf("%d\n", &sem);
-    sem = NULL;
-    printf("%d\n", val);
-    printf("%d\n", &sem);
-
-
+int del(HashMap* map, char* filePath) {
+    unsigned long h = hash(filePath);
+    int ind = h % 16;
+    KeyValPair* head = map->buckets[ind];
+    KeyValPair* prev = NULL;
+    while (strcmp(head->key, filePath)) {
+        prev = head;
+        head = head->next;
+    }
+    if (prev == NULL) {
+        map->buckets[ind] = head->next;
+    }
+    else {
+        prev->next = head->next;
+    }
+    free(head);
     return 0;
 }

@@ -11,11 +11,18 @@ typedef struct KeyValPair {
 
 typedef struct HashMap {
     struct KeyValPair* buckets[16];
+    int type;   // 1 indicates mapping to semaphores, 2 will be for queue nodes
 } HashMap;
 
-KeyValPair* initKeyValPair(char* key, void* val);
-HashMap* initMap();
+// this is purely for testing that map works with our own user defined types
+typedef struct TestObj {
+    int val;
+} TestObj;
+
+KeyValPair* initKeyValPair(char* key, void* val, int typeFlag);
+HashMap* initMap(int typeFlag);
 int put(HashMap* map, char* filePath, void* data);
 void* get(HashMap* map, char* filePath);
+int del(HashMap* map, char* filePath);
 
 #endif
