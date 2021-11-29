@@ -27,15 +27,19 @@ hash(unsigned char *str)
 // -----------------------------------------------------------------------------
 
 
-KeyValPair* initKeyValPair(char* key, void* val, size_t dataSize) {
+KeyValPair* initKeyValPair(char* key, void* val, size_t dataSize, int type) {
     KeyValPair* keyVal = malloc(sizeof(KeyValPair));
     keyVal->key = malloc(strlen(key));
     strcpy(keyVal->key, key);
     // ******* CHANGED HERE
-    // keyVal->val = malloc(dataSize);
-    // memcpy(keyVal->val, val, dataSize);
-    keyVal->val = malloc(8 * sizeof(char));
-    keyVal->val = val;
+    if (type == 1) {
+        keyVal->val = malloc(dataSize);
+        memcpy(keyVal->val, val, dataSize);
+    }
+    if (type == 2) {
+        keyVal->val = malloc(8 * sizeof(char));
+        keyVal->val = val;
+    }
     // ******* END CHANGE HERE
     keyVal->next = NULL;
     return keyVal;
@@ -57,13 +61,13 @@ HashMap* initMap(size_t dataSize) {
         - initialize the key-val object
         - insert this into the linked list for that bucket
 */
-int put(HashMap* map, char* filePath, void* data) {
+int put(HashMap* map, char* filePath, void* data, int type) {
     if (get(map, filePath) != NULL) {
         return 1;
     }
     unsigned long h = hash(filePath);
     int ind = h % 16;
-    KeyValPair* keyVal = initKeyValPair(filePath, data, map->dataSize);
+    KeyValPair* keyVal = initKeyValPair(filePath, data, map->dataSize, type);
     
     if (map->buckets[ind] == NULL) {
         map->buckets[ind] = keyVal;

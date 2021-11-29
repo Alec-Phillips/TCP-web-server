@@ -17,7 +17,6 @@ int testInit(LRUCache* cache) {
     status = updateCache(cache, NULL, cache->head, "root/desktop", NULL, 3);
     contents = checkCache(cache, "root/desktop");
     assert(contents == NULL);
-    // printCache(cache);
 
     printCache(cache);
     updateCache(cache, NULL, cache->head, "root/desktop/f1.txt", "f1", 2);
@@ -34,16 +33,44 @@ int testInit(LRUCache* cache) {
     printCache(cache);
     updateCache(cache, NULL, cache->head, "root/desktop/f0.txt", "f0", 2);
     checkCache(cache, "root/desktop/f1.txt");
+    printCache(cache);
+    printf("END OF TEST1\n\n\n");
 
-    contents = checkCache(cache, "root/desktop/f1.txt");
-    puts(contents);
-    // updateCache(cache, NULL, cache->head, "root/desktop/f0.txt", NULL, 3);
-    // printCache(cache);
+    return 0;
+}
+
+int testGet(LRUCache* cache) {
+    updateCache(cache, NULL, cache->head, "root/desktop/f3.txt", NULL, 1);
+    printCache(cache);
+    updateCache(cache, NULL, cache->head, "root/desktop/f2.txt", NULL, 1);
+    printCache(cache);
+    updateCache(cache, NULL, cache->head, "root/desktop/f0.txt", NULL, 1);
+    printCache(cache);
+    updateCache(cache, NULL, cache->head, "root/desktop/f4.txt", NULL, 1);
+    printCache(cache);
+    printf("END OF TEST2\n\n\n");
+
+    return 0;
+}
+
+int testDel(LRUCache* cache) {
+    updateCache(cache, NULL, cache->head, "root/desktop/f0.txt", NULL, 3);
+    printCache(cache);
+    updateCache(cache, NULL, cache->head, "root/desktop/f3.txt", NULL, 3);
+    printCache(cache);
+    updateCache(cache, NULL, cache->head, "root/desktop/f2.txt", NULL, 3);
+    printCache(cache);
+    updateCache(cache, NULL, cache->head, "root/desktop/f4.txt", NULL, 3);
+    printCache(cache);
+    printf("END OF TEST3\n\n\n");
+
     return 0;
 }
 
 int main(void) {
     LRUCache* cache = initCache(4);
     testInit(cache);
+    testGet(cache);
+    testDel(cache);
     return 0;
 }

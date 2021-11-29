@@ -54,6 +54,12 @@ char* checkCache(LRUCache* cache, char* filePath) {
 int updateCache(LRUCache* cache, QueueNode* target, QueueNode* head, char* filePath, char* fileContents, int type) {
     if (type == 1) { // this is for a GET request
                      // no data needs to change
+        if (target == NULL) {
+            target = get(cache->map, filePath);
+            if (target == NULL) {
+                return 1;
+            }
+        }
         if (target == head) {
             return 0;
         }
@@ -96,7 +102,7 @@ int updateCache(LRUCache* cache, QueueNode* target, QueueNode* head, char* fileP
             head->prev = curr;
             cache->head = curr;
         }
-        put(cache->map, filePath, curr);
+        put(cache->map, filePath, curr, 2);
     }
     else if (type == 3) { // this is for a DELETE request
         target = get(cache->map, filePath);

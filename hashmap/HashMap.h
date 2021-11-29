@@ -21,9 +21,9 @@ typedef struct TestObj {
     int val;
 } TestObj;
 
-KeyValPair* initKeyValPair(char* key, void* val, size_t dataSize);
+KeyValPair* initKeyValPair(char* key, void* val, size_t dataSize, int type);
 HashMap* initMap(size_t dataSize);
-int put(HashMap* map, char* filePath, void* data);
+int put(HashMap* map, char* filePath, void* data, int type);
 void* get(HashMap* map, char* filePath);
 int del(HashMap* map, char* filePath);
 
