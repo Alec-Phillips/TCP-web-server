@@ -45,6 +45,7 @@ int updateNodeContents(QueueNode* node, char* contents) {
 char* checkCache(LRUCache* cache, char* filePath) {
     QueueNode* node = get(cache->map, filePath);
     if (node != NULL) {
+        printf("**\n%p\n**\n", node);
         return node->contents;
     }
     return NULL;
@@ -74,8 +75,10 @@ int updateCache(LRUCache* cache, QueueNode* target, QueueNode* head, char* fileP
         while (curr->next != NULL && curr->contents != NULL) {
             curr = curr->next;
         }
+        // printf("**\n%p\n**\n", curr);
         curr->contents = malloc(strlen(fileContents));
         strcpy(curr->contents, fileContents);
+        // printf("**\n%p\n**\n", curr);
         if (curr->next == NULL) {
             curr->prev->next = NULL;
             curr->next = head;
@@ -97,7 +100,11 @@ int updateCache(LRUCache* cache, QueueNode* target, QueueNode* head, char* fileP
     }
     else if (type == 3) { // this is for a DELETE request
         target = get(cache->map, filePath);
+        // printf("%p\n", target);
+        // puts(target->contents);
+        free(target->contents);
         target->contents = NULL;
+        // puts(target->contents);
         QueueNode* tail = head;
         while (tail->next != NULL) {
             tail = tail->next;
@@ -130,4 +137,10 @@ void printCache(LRUCache* cache) {
         curr = curr->next;
     }
     printf("NULL\n");
+    curr = cache->head;
+    while (curr != NULL) {
+        printf("%p -> ", curr);
+        curr = curr->next;
+    }
+    printf("NULL\n\n");
 }

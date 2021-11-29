@@ -17,33 +17,28 @@ int testInit(LRUCache* cache) {
     status = updateCache(cache, NULL, cache->head, "root/desktop", NULL, 3);
     contents = checkCache(cache, "root/desktop");
     assert(contents == NULL);
+    // printCache(cache);
+
     printCache(cache);
-    // puts("1");
     updateCache(cache, NULL, cache->head, "root/desktop/f1.txt", "f1", 2);
-    // puts("2");
+    checkCache(cache, "root/desktop/f1.txt");
     printCache(cache);
     updateCache(cache, NULL, cache->head, "root/desktop/f2.txt", "f2", 2);
+    checkCache(cache, "root/desktop/f1.txt");
     printCache(cache);
     updateCache(cache, NULL, cache->head, "root/desktop/f3.txt", "f3", 2);
-    // puts("3");
+    checkCache(cache, "root/desktop/f1.txt");
     printCache(cache);
     updateCache(cache, NULL, cache->head, "root/desktop/f4.txt", "f4", 2);
-    // puts("4");
+    checkCache(cache, "root/desktop/f1.txt");
     printCache(cache);
     updateCache(cache, NULL, cache->head, "root/desktop/f0.txt", "f0", 2);
+    checkCache(cache, "root/desktop/f1.txt");
+
     contents = checkCache(cache, "root/desktop/f1.txt");
     puts(contents);
-    contents = checkCache(cache, "root/desktop/f2.txt");
-    puts(contents);
-    contents = checkCache(cache, "root/desktop/f3.txt");
-    puts(contents);
-    contents = checkCache(cache, "root/desktop/f4.txt");
-    puts(contents);
-    contents = checkCache(cache, "root/desktop/f0.txt");
-    puts(contents);
-    printCache(cache);
-    contents = checkCache(cache, "root/desktop/f1.txt");
-    puts(contents);
+    // updateCache(cache, NULL, cache->head, "root/desktop/f0.txt", NULL, 3);
+    // printCache(cache);
     return 0;
 }
 

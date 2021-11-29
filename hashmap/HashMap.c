@@ -31,8 +31,12 @@ KeyValPair* initKeyValPair(char* key, void* val, size_t dataSize) {
     KeyValPair* keyVal = malloc(sizeof(KeyValPair));
     keyVal->key = malloc(strlen(key));
     strcpy(keyVal->key, key);
-    keyVal->val = malloc(dataSize);
-    memcpy(keyVal->val, val, dataSize);
+    // ******* CHANGED HERE
+    // keyVal->val = malloc(dataSize);
+    // memcpy(keyVal->val, val, dataSize);
+    keyVal->val = malloc(8 * sizeof(char));
+    keyVal->val = val;
+    // ******* END CHANGE HERE
     keyVal->next = NULL;
     return keyVal;
 }
