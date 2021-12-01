@@ -11,12 +11,16 @@
 #include <assert.h>
 #include <stdbool.h>
 
+#include "../LRU/Cache.h"
+
 /* 
 	Note:
 	- You need to change the two includes above to match where the files are for you (absolute path I believe)
 
 	Compilation command:
 	gcc server.c ../file_system/FileSystem.c ../file_system/UsefulStructures.c -Wall -o se
+	gcc server.c ../hashmap/HashMap.c ../LRU/Cache.c -Wall -o se
+	gcc server.c ../hashmap/HashMap.c -Wall -o se
 
 	Run with ./se
 */
@@ -36,6 +40,8 @@ void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool 
 void requestTypeString(char* requestString, int httpStatus);
 char* replaceWord(const char* s, const char* oldW, const char* newW);
 
+// init the LRU
+LRUCache* cache;
 
 // Here is our global array (eventually hashmap, hopefully)
 // holds the filenames and their corresponding semaphore
@@ -112,6 +118,9 @@ int removeFileSem(char *target) {
 
 int main(int argc, char *argv[])
 {
+	// puts("here");
+	cache = initCache(10);
+	// puts("cache initialized");
 	/*
 	server_socket: ID of socket of web server
 	client_sock: ID of socket of web client
@@ -299,15 +308,22 @@ void connection_handler(void* socket_desc) {
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						}
 						else {
-							getFileContents(actualpath, fileContents);
-							if(fileContents == NULL) { //If the file is found, but there are no file contents.
-								createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.", is_persistent_connection);
+							char* cacheContents = checkCache(cache, actualpath);
+							if (cacheContents != NULL) {
+								strcpy(fileContents, cacheContents);
+								updateCache(cache, NULL, cache->head, actualpath, NULL, 1);
 							}
 							else {
-								createHTTPResponse(HTTPResponse, 200, fileContents, is_persistent_connection);
+								getFileContents(actualpath, fileContents);
+								if(fileContents == NULL) { //If the file is found, but there are no file contents.
+									createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.", is_persistent_connection);
+								}
+								else {
+									createHTTPResponse(HTTPResponse, 200, fileContents, is_persistent_connection);
+								}
+								send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+								sem_post(&(file_sem->mutex));
 							}
-							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
-							sem_post(&(file_sem->mutex));
 						}
 					}
 				}
@@ -330,7 +346,6 @@ void connection_handler(void* socket_desc) {
 						printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
 						fileSem = addFileSem(actualpath);
 					}
-
 					sem_wait(&(fileSem->mutex));
 					FILE *fp;
 					puts(actualpath);
@@ -342,6 +357,9 @@ void connection_handler(void* socket_desc) {
 					memcpy(fileContents, requestBody, strlen(requestBody) + 1);
 					fileContents[strlen(requestBody) + 2] = '\0';
 					fputs(fileContents, fp);
+					// update the cache
+					updateCache(cache, NULL, cache->head, actualpath, fileContents, 2);
+					// ---
 					fclose(fp);
 					sem_post(&(fileSem->mutex));				
 					char HTMLResponse[PATH_MAX + 1];
@@ -371,6 +389,7 @@ void connection_handler(void* socket_desc) {
 					else {
 						remove(actualpath);
 						removeFileSem(actualpath);
+						updateCache(cache, NULL, cache->head, actualpath, NULL, 3);
 						FileSem removed = fileSemaphores[numFiles];
 						// call sem_post for each waiting process
 						// they will each then return the 404 file to their client
