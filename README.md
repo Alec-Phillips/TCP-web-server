@@ -9,10 +9,10 @@ A simple, web server made with TCP Web Sockets.
 - You're good to go!
 
 **To initialize a web server on your device**,
-- Navigate to `/server-and-client/server.c` in your terminal
-- Run `gcc server.c -Wall -o se`
-- Run `/se {portNumber}` and you should see it begin listening on the given server port.
-  - Ex: `/se 2000` will run a web server on port 2000.
+- Navigate to `./server-and-client/` in your terminal
+- Run `gcc server.c ../file_system/FileSystem.c ../file_system/UsefulStructures.c -lz -Wall -o se`
+- Run `./se {portNumber}` and you should see it begin listening on the given server port.
+  - Ex: `./se 2000` will run a web server on port 2000.
 
 **Two ways to connect to said web server**:
 - Use the browser!

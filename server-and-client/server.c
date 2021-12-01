@@ -17,7 +17,7 @@
 	- You need to change the two includes above to match where the files are for you (absolute path I believe)
 
 	Compilation command:
-	gcc server.c ../file_system/FileSystem.c ../file_system/UsefulStructures.c -Wall -o se
+	gcc server.c ../file_system/FileSystem.c ../file_system/UsefulStructures.c -lz -Wall -o se
 
 	Run with ./se
 */
