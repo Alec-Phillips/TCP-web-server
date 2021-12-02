@@ -12,12 +12,15 @@
 #include <stdbool.h>
 #include "zlib.h"
 
+#include "../hashmap/HashMap.h"
+
 /* 
 	Note:
 	- You need to change the two includes above to match where the files are for you (absolute path I believe)
 
 	Compilation command:
 	gcc server.c ../file_system/FileSystem.c ../file_system/UsefulStructures.c -lz -Wall -o se
+	gcc server.c ../hashmap/HashMap.c -lz -Wall -o se
 
 	Run with ./se
 */
@@ -36,6 +39,41 @@ void getFileContents(char actualpath[], char fileContents[]);
 void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool is_persistent_connection, char* compression_alg);
 void requestTypeString(char* requestString, int httpStatus);
 char* replaceWord(const char* s, const char* oldW, const char* newW);
+
+
+// init the content type mapping
+HashMap* fileExtMap;
+
+void initFileExtMap(HashMap** map) {
+	*map = initMap(8 * sizeof(char));
+	char* ext1 = "text/plain";
+    char* ext2 = "text/html";
+	char* ext3 = "application/json";
+	char* ext4 = "text/css";    
+	char* ext5 = "text/csv";
+	char* ext6 = "application/javascript";
+	char* ext7 = "application/xml";
+    char* val1 = ".txt";
+    char* val2 = ".html";
+	char* val3 = ".json";
+	char* val4 = ".css";
+	char* val5 = ".csv";
+	char* val6 = ".js";
+	char* val7 = ".xml";
+    put(*map, ext1, val1, 1);
+    put(*map, ext2, val2, 1);
+	put(*map, ext3, val3, 1);
+	put(*map, ext4, val4, 1);
+    put(*map, ext5, val5, 1);
+	put(*map, ext6, val6, 1);
+	put(*map, ext7, val7, 1);
+	// char* test = get(*map, ext1);
+	// puts(test);
+	// test = get(*map, ext2);
+	// puts(test);
+	// test = get(*map, ext4);
+	// puts(test);
+}
 
 
 // Here is our global array (eventually hashmap, hopefully)
@@ -126,6 +164,8 @@ int main(int argc, char *argv[])
 	struct sockaddr_in server, client;
 	int server_backlog = 100;
 	int server_port = atoi(argv[1]);
+
+	initFileExtMap(&fileExtMap);
 
 	//Create socket
 	server_socket = socket(AF_INET , SOCK_STREAM , 0); //assigns ID to server_socket
@@ -229,6 +269,14 @@ void connection_handler(void* socket_desc) {
 			
 			char* requestType = strtok_r(NULL, " ", &main_save_ptr); // GET, POST, DELETE
 			char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
+
+			// Getting the contentType here, not sure if this is the best way to do this...
+ 			char* contentType = strtok_r(NULL, " ", &main_save_ptr);
+ 			contentType = strtok_r(NULL, "\n", &main_save_ptr);
+ 			printf("2: %s\n", contentType);
+ 			// End getting content type
+
+
 			if (path == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
 			char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
 			if (http_version == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
@@ -347,16 +395,25 @@ void connection_handler(void* socket_desc) {
 					createDirectories(relativePath);
 					getRealPath(relativePath, actualpath, requestType);
 
+					*(contentType + (strlen(contentType) - 1)) = '\0';
+ 					puts(contentType);
+ 					char* fileExt = get(fileExtMap, contentType);
+ 					char actualPathWExt[strlen(actualpath) + strlen(fileExt)];
+ 					strcpy(actualPathWExt, actualpath);
+ 					strcat(actualPathWExt, fileExt);
+ 					puts("\n\n\n\n");
+ 					puts(actualPathWExt);
+
 					FileSem* fileSem;
-					if((fileSem = getFileSem(actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
-						printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
-						fileSem = addFileSem(actualpath);
+					if((fileSem = getFileSem(actualPathWExt)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
+						printf("MAKING NEW FILE SEM AT PATH: %s\n", actualPathWExt);
+						fileSem = addFileSem(actualPathWExt);
 					}
 
 					sem_wait(&(fileSem->mutex));
 					FILE *fp;
-					puts(actualpath);
-					fp = fopen(actualpath, "w");
+					puts(actualPathWExt);
+					fp = fopen(actualPathWExt, "w");
 					char fileContents[contentLength + 2];
 					printf("Content Length: %d\n", contentLength);
 					puts(fileContents);
@@ -367,7 +424,7 @@ void connection_handler(void* socket_desc) {
 					fclose(fp);
 					sem_post(&(fileSem->mutex));				
 					char HTMLResponse[PATH_MAX + 1];
-					sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
+					sprintf(HTMLResponse, "File created successfully at path %s", actualPathWExt);
 					createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection, NULL);
 					puts("about to send response to client");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
