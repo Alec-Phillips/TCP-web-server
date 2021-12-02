@@ -177,13 +177,30 @@ int semTest() {
     return 0;
 }
 
+int testExtMap() {
+    HashMap* map = initMap(8 * sizeof(char));
+    char* ext1 = "text/plain";
+    char* ext2 = "text/html";
+    char* val1 = ".txt";
+    char* val2 = ".html";
+    put(map, ext1, val1, 1);
+    put(map, ext2, val2, 1);
+
+    char* ext = get(map, ext1);
+    assert (!strcmp(ext, val1));
+    ext = get(map, ext2);
+    assert (!strcmp(ext, val2));
+    return 0;
+}
+
 
 int main(void) {
 
-    testPutGet();
-    testPutRepeat();
-    testGetNull();
-    testDel();
+    // testPutGet();
+    // testPutRepeat();
+    // testGetNull();
+    // testDel();
+    testExtMap();
     // semTest();
 
     return 0;

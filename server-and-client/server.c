@@ -43,6 +43,40 @@ char* replaceWord(const char* s, const char* oldW, const char* newW);
 // init the LRU
 LRUCache* cache;
 
+// init the content type mapping
+HashMap* fileExtMap;
+
+void initFileExtMap(HashMap** map) {
+	*map = initMap(8 * sizeof(char));
+	char* ext1 = "text/plain";
+    char* ext2 = "text/html";
+	char* ext3 = "application/json";
+	char* ext4 = "text/css";    
+	char* ext5 = "text/csv";
+	char* ext6 = "application/javascript";
+	char* ext7 = "application/xml";
+    char* val1 = ".txt";
+    char* val2 = ".html";
+	char* val3 = ".json";
+	char* val4 = ".css";
+	char* val5 = ".csv";
+	char* val6 = ".js";
+	char* val7 = ".xml";
+    put(*map, ext1, val1, 1);
+    put(*map, ext2, val2, 1);
+	put(*map, ext3, val3, 1);
+	put(*map, ext4, val4, 1);
+    put(*map, ext5, val5, 1);
+	put(*map, ext6, val6, 1);
+	put(*map, ext7, val7, 1);
+	// char* test = get(*map, ext1);
+	// puts(test);
+	// test = get(*map, ext2);
+	// puts(test);
+	// test = get(*map, ext4);
+	// puts(test);
+}
+
 // Here is our global array (eventually hashmap, hopefully)
 // holds the filenames and their corresponding semaphore
 
@@ -120,6 +154,7 @@ int main(int argc, char *argv[])
 {
 	// puts("here");
 	cache = initCache(10);
+	initFileExtMap(&fileExtMap);
 	// puts("cache initialized");
 	/*
 	server_socket: ID of socket of web server
@@ -237,6 +272,15 @@ void connection_handler(void* socket_desc) {
 			
 			char* requestType = strtok_r(NULL, " ", &main_save_ptr); // GET, POST, DELETE
 			char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
+
+
+			// Getting the contentType here, not sure if this is the best way to do this...
+			char* contentType = strtok_r(NULL, " ", &main_save_ptr);
+			contentType = strtok_r(NULL, "\n", &main_save_ptr);
+			printf("2: %s\n", contentType);
+			// End getting content type
+
+
 			if (path == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
 			char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
 			if (http_version == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
@@ -308,10 +352,13 @@ void connection_handler(void* socket_desc) {
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						}
 						else {
-							char* cacheContents = checkCache(cache, actualpath);
-							if (cacheContents != NULL) {
-								strcpy(fileContents, cacheContents);
-								updateCache(cache, NULL, cache->head, actualpath, NULL, 1);
+							// char* cacheContents = checkCache(cache, actualpath);
+							// if (cacheContents != NULL) {
+							// 	strcpy(fileContents, cacheContents);
+							// 	updateCache(cache, NULL, cache->head, actualpath, NULL, 1);
+							// }
+							if (0){
+								continue;
 							}
 							else {
 								getFileContents(actualpath, fileContents);
@@ -331,7 +378,15 @@ void connection_handler(void* socket_desc) {
 					printf("REQUEST BODY: %s\n", requestBody);
 					printf("REQUEST TYPE %s\n", requestType);
 					printf("CONTENT LENGTH: %d\n", contentLength);
+
+
+					// // Getting the contentType here, not sure if this is the best way to do this...
+					// char* contentType = strtok_r(NULL, " ", &main_save_ptr);
+					// contentType = strtok_r(NULL, " ", &main_save_ptr);
+					// printf("\n\n2: %s\n\n", contentType);
+					// // End getting content type
 					
+
 					char* rootPointer = "../root";
 					char relativePath[strlen(rootPointer) + strlen(path)];
 					strcpy(relativePath, rootPointer);
@@ -341,29 +396,41 @@ void connection_handler(void* socket_desc) {
 					createDirectories(relativePath);
 					getRealPath(relativePath, actualpath, requestType);
 
+					*(contentType + (strlen(contentType) - 1)) = '\0';
+					puts(contentType);
+					char* fileExt = get(fileExtMap, contentType);
+					char actualPathWExt[strlen(actualpath) + strlen(fileExt)];
+					strcpy(actualPathWExt, actualpath);
+					strcat(actualPathWExt, fileExt);
+					puts("\n\n\n\n");
+					puts(actualPathWExt);
+
 					FileSem* fileSem;
-					if((fileSem = getFileSem(actualpath)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
-						printf("MAKING NEW FILE SEM AT PATH: %s\n", actualpath);
-						fileSem = addFileSem(actualpath);
+					if((fileSem = getFileSem(actualPathWExt)) == NULL) { //if the filesem doesn't exist yet, we make a new one!
+						printf("MAKING NEW FILE SEM AT PATH: %s\n", actualPathWExt);
+						fileSem = addFileSem(actualPathWExt);
 					}
 					sem_wait(&(fileSem->mutex));
 					FILE *fp;
-					puts(actualpath);
-					fp = fopen(actualpath, "w");
+					puts(actualPathWExt);
+					fp = fopen(actualPathWExt, "w");
 					char fileContents[contentLength + 2];
 					printf("Content Length: %d\n", contentLength);
 					puts(fileContents);
+					
 					puts(requestBody);
 					memcpy(fileContents, requestBody, strlen(requestBody) + 1);
 					fileContents[strlen(requestBody) + 2] = '\0';
 					fputs(fileContents, fp);
+					
 					// update the cache
-					updateCache(cache, NULL, cache->head, actualpath, fileContents, 2);
+					// updateCache(cache, NULL, cache->head, actualpath, fileContents, 2);
 					// ---
 					fclose(fp);
 					sem_post(&(fileSem->mutex));				
 					char HTMLResponse[PATH_MAX + 1];
-					sprintf(HTMLResponse, "File created successfully at path %s", actualpath);
+					sprintf(HTMLResponse, "File created successfully at path %s", actualPathWExt);
+					
 					createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection);
 					puts("about to send response to client");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
@@ -389,7 +456,7 @@ void connection_handler(void* socket_desc) {
 					else {
 						remove(actualpath);
 						removeFileSem(actualpath);
-						updateCache(cache, NULL, cache->head, actualpath, NULL, 3);
+						// updateCache(cache, NULL, cache->head, actualpath, NULL, 3);
 						FileSem removed = fileSemaphores[numFiles];
 						// call sem_post for each waiting process
 						// they will each then return the 404 file to their client

@@ -18,10 +18,10 @@ hash(unsigned char *str)
 {
     unsigned long hash = 5381;
     int c;
-
+    // puts("2.1");
     while (c = *str++)
         hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-
+    // puts("2.2");
     return hash;
 }
 // -----------------------------------------------------------------------------
@@ -83,15 +83,23 @@ int put(HashMap* map, char* filePath, void* data, int type) {
 }
 
 void* get(HashMap* map, char* filePath) {
-    unsigned long h = hash(filePath);
+    // puts("1.1");
+    // printf("%d\n", strlen(filePath));
+    char* toHash = malloc(strlen(filePath) * sizeof(char));
+    strcpy(toHash, filePath);
+    // puts(toHash);
+    unsigned long h = hash(toHash);
     int ind = h % 16;
+    // printf("%d\n", ind);
     KeyValPair* head = map->buckets[ind];
+    // puts("1.1");
     while (head != NULL) {
         if (! strcmp(head->key, filePath)) {
             return head->val;
         }
         head = head->next;
     }
+    // puts("1.1");
     return NULL;
 }
 
