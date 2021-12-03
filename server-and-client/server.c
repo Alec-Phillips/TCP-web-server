@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <unistd.h>
 #include <assert.h>
 #include <stdbool.h>
 #include "zlib.h"
@@ -335,7 +336,22 @@ void connection_handler(void* socket_desc) {
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					} 
 					else {
-						FileSem* file_sem = getFileSem(actualpath);
+
+						*(contentType + strlen(contentType)) = '\0';
+						puts(contentType);
+						char* fileExt = get(fileExtMap, contentType);
+						char actualPathWExt[strlen(actualpath) + strlen(fileExt)];
+						strcpy(actualPathWExt, actualpath);
+						strcat(actualPathWExt, fileExt);
+						puts("\n\n\n\n");
+						puts(actualPathWExt);
+
+						if(! access(actualPathWExt, F_OK) == 0) {
+							createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL);
+							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+						}
+
+						FileSem* file_sem = getFileSem(actualPathWExt);
 						if(file_sem == NULL) { // If no file sem is found to associate with file at path
 							createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?", is_persistent_connection, NULL);
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
@@ -346,7 +362,7 @@ void connection_handler(void* socket_desc) {
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						}
 						else {
-							getFileContents(actualpath, fileContents);
+							getFileContents(actualPathWExt, fileContents);
 							if(fileContents == NULL) { //If the file is found, but there are no file contents.
 								createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.", is_persistent_connection, NULL);
 							}
@@ -432,9 +448,24 @@ void connection_handler(void* socket_desc) {
 					strcpy(relativePath, rootPointer);
 					strcat(relativePath, path);
 					getRealPath(relativePath, actualpath, requestType);
+
+					*(contentType + strlen(contentType)) = '\0';
+					puts(contentType);
+					char* fileExt = get(fileExtMap, contentType);
+					char actualPathWExt[strlen(actualpath) + strlen(fileExt)];
+					strcpy(actualPathWExt, actualpath);
+					strcat(actualPathWExt, fileExt);
+					puts("\n\n\n\n");
+					puts(actualPathWExt);
+
+					if(! access(actualPathWExt, F_OK) == 0) {
+						createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL);
+						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
+					}
+
 					// get the path to the file to delete
 					// check that the file actaully exists
-					FileSem* fileSem = getFileSem(actualpath);
+					FileSem* fileSem = getFileSem(actualPathWExt);
 					if(fileSem == NULL) {
 						createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.", is_persistent_connection, NULL);
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
@@ -444,8 +475,8 @@ void connection_handler(void* socket_desc) {
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 					}
 					else {
-						remove(actualpath);
-						removeFileSem(actualpath);
+						remove(actualPathWExt);
+						removeFileSem(actualPathWExt);
 						FileSem removed = fileSemaphores[numFiles];
 						// call sem_post for each waiting process
 						// they will each then return the 404 file to their client
@@ -455,7 +486,7 @@ void connection_handler(void* socket_desc) {
 						// destroy the semaphore
 						sem_destroy(&(removed.mutex));
 						char HTMLResponse[PATH_MAX + 1];
-						sprintf(HTMLResponse, "File at path %s deleted successfully", actualpath);
+						sprintf(HTMLResponse, "File at path %s deleted successfully", actualPathWExt);
 						createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection, NULL);
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						puts("sent response to client");
@@ -529,7 +560,11 @@ void createDirectories(char* path) {
 
 int getRealPath(char* relativePath, char* actualpath, char* requestType) {
 	printf("Relative path is: %s\n", relativePath);
-	if(realpath(relativePath, actualpath) == NULL && (strcmp(requestType, "GET") == 0 || strcmp(requestType, "DELETE") == 0)) {
+	// if(realpath(relativePath, actualpath) == NULL && (strcmp(requestType, "GET") == 0 || strcmp(requestType, "DELETE") == 0)) {
+	// 	printf("ERROR: %s is an incorrect path.\n", relativePath);
+	// 	return 0;
+	// }
+	if(realpath(relativePath, actualpath) == NULL && 0) {
 		printf("ERROR: %s is an incorrect path.\n", relativePath);
 		return 0;
 	}
