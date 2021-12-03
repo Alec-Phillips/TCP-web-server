@@ -37,7 +37,7 @@ void connection_handler(void* socket_desc);
 void createDirectories(char* path);
 int getRealPath(char buffer[], char actualpath[], char* requestType); //realpath gets stored to actualpath
 void getFileContents(char actualpath[], char fileContents[]);
-void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool is_persistent_connection, char* compression_alg);
+void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool is_persistent_connection, char* compression_alg, char* contentType);
 void requestTypeString(char* requestString, int httpStatus);
 char* replaceWord(const char* s, const char* oldW, const char* newW);
 
@@ -332,7 +332,7 @@ void connection_handler(void* socket_desc) {
 					strcpy(relativePath, rootPointer);
 					strcat(relativePath, path);
 					if(!getRealPath(relativePath, actualpath, requestType)) { //If path is incorrect
-						createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL);
+						createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL, "text/plain");
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					} 
 					else {
@@ -347,24 +347,24 @@ void connection_handler(void* socket_desc) {
 						puts(actualPathWExt);
 
 						if(! access(actualPathWExt, F_OK) == 0) {
-							createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL);
+							createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL, "text/plain");
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						}
 
 						FileSem* file_sem = getFileSem(actualPathWExt);
 						if(file_sem == NULL) { // If no file sem is found to associate with file at path
-							createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?", is_persistent_connection, NULL);
+							createHTTPResponse(HTTPResponse, 404, "File could not be found. Maybe somewhere else?", is_persistent_connection, NULL, "text/plain");
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						}
 						// sem_wait(&(file_sem->mutex));
 						else if (semWait(file_sem) == 1) { 
-							createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST", is_persistent_connection, NULL);
+							createHTTPResponse(HTTPResponse, 404, "THE REQUESTED FILE DOES NOT EXIST", is_persistent_connection, NULL, "text/plain");
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						}
 						else {
 							getFileContents(actualPathWExt, fileContents);
 							if(fileContents == NULL) { //If the file is found, but there are no file contents.
-								createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.", is_persistent_connection, NULL);
+								createHTTPResponse(HTTPResponse, 404, "File found, but file contents weren't found. May be a problem on our end.", is_persistent_connection, NULL, "text/plain");
 							}
 							else {
 								if (compression_alg != NULL) {
@@ -384,9 +384,10 @@ void connection_handler(void* socket_desc) {
 									else if(res ==  Z_MEM_ERROR){
 										printf("Not enough memory for compression!\n");
 									}
-									createHTTPResponse(HTTPResponse, 200, compressedFileContents, is_persistent_connection, compression_alg);
+									createHTTPResponse(HTTPResponse, 200, compressedFileContents, is_persistent_connection, compression_alg, contentType);
+									printf("response is %s\n", HTTPResponse);
 								}
-								else {printf("creating response\n"); createHTTPResponse(HTTPResponse, 200, fileContents, is_persistent_connection, compression_alg);}
+								else {printf("creating response\n"); createHTTPResponse(HTTPResponse, 200, fileContents, is_persistent_connection, compression_alg, contentType);}
 							}
 							send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 							sem_post(&(file_sem->mutex));
@@ -437,7 +438,7 @@ void connection_handler(void* socket_desc) {
 					sem_post(&(fileSem->mutex));				
 					char HTMLResponse[PATH_MAX + 1];
 					sprintf(HTMLResponse, "File created successfully at path %s", actualPathWExt);
-					createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection, NULL);
+					createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection, NULL, contentType);
 					puts("about to send response to client");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					puts("sent response to client");
@@ -459,7 +460,7 @@ void connection_handler(void* socket_desc) {
 					puts(actualPathWExt);
 
 					if(! access(actualPathWExt, F_OK) == 0) {
-						createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL);
+						createHTTPResponse(HTTPResponse, 404, "Incorrect path. Please try again with a different path.", is_persistent_connection, NULL, "text/plain");
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 					}
 
@@ -467,11 +468,11 @@ void connection_handler(void* socket_desc) {
 					// check that the file actaully exists
 					FileSem* fileSem = getFileSem(actualPathWExt);
 					if(fileSem == NULL) {
-						createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.", is_persistent_connection, NULL);
+						createHTTPResponse(HTTPResponse, 404, "The requested file doesn't even exist.", is_persistent_connection, NULL, "text/plain");
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 					}
 					else if (semWait(fileSem) == 1) {
-						createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.", is_persistent_connection, NULL);
+						createHTTPResponse(HTTPResponse, 404, "Sorry, the requested file was deleted by a previous client.", is_persistent_connection, NULL, "text/plain");
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);	
 					}
 					else {
@@ -487,19 +488,19 @@ void connection_handler(void* socket_desc) {
 						sem_destroy(&(removed.mutex));
 						char HTMLResponse[PATH_MAX + 1];
 						sprintf(HTMLResponse, "File at path %s deleted successfully", actualPathWExt);
-						createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection, NULL);
+						createHTTPResponse(HTTPResponse, 200, HTMLResponse, is_persistent_connection, NULL, contentType);
 						send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 						puts("sent response to client");
 					}
 						
 				}
 				else {
-					createHTTPResponse(HTTPResponse, 501, "That request type isn't implemented. The available request types are GET, PUT, and DELETE.", is_persistent_connection, NULL);
+					createHTTPResponse(HTTPResponse, 501, "That request type isn't implemented. The available request types are GET, PUT, and DELETE.", is_persistent_connection, NULL, "text/plain");
 					send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 				}
 			}
 			else {
-				createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.", is_persistent_connection, NULL);
+				createHTTPResponse(HTTPResponse, 400, "Invalid request type. Please try again.", is_persistent_connection, NULL, "text/plain");
 				send(client_sock, HTTPResponse, strlen(HTTPResponse), 0);
 			}
 			// increment [num_transactions] by 1. If equal to max allowed, break out of while loop
@@ -615,7 +616,7 @@ void requestTypeString(char* requestString, int httpStatus) {
 	}
 }
 
-void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool is_persistent_connection, char* compression_alg) {
+void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool is_persistent_connection, char* compression_alg, char* contentType) {
 	//Time stuff may be implemented later.
 
 	// time_t t = time(NULL);
@@ -627,18 +628,18 @@ void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool 
 	printf("entering if statements\n");
 	if (is_persistent_connection == false) {
 		printf("no persistent connection\n");
-		if (compression_alg == NULL) sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/plain\nConnection: closed\n\n%s", httpStatus, RTString, strlen(message), message);
+		if (compression_alg == NULL) sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: %s\nConnection: closed\n\n%s", httpStatus, RTString, strlen(message), contentType, message);
 		else {
 			printf("doing sprintf\n");
-			sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/plain\nContent-Encoding: %s\nConnection: closed\n\n%s", httpStatus, RTString, strlen(message), compression_alg, message);
+			sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: %s\nContent-Encoding: %s\nConnection: closed\n\n%s", httpStatus, RTString, strlen(message), contentType, compression_alg, message);
 		}
 	}
 	else {
 		printf("yes persistent connection\n");
-		if (compression_alg == NULL) sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/plain\nConnection: keep-alive\nKeep-Alive:timeout=5, max=1000\n\n%s", httpStatus, RTString, strlen(message), message);
+		if (compression_alg == NULL) sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: %s\nConnection: keep-alive\nKeep-Alive:timeout=5, max=1000\n\n%s", httpStatus, RTString, strlen(message), contentType, message);
 		else {
 			printf("doing sprintf\n");
-			sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: text/plain\nContent-Encoding: %s\nConnection: keep-alive\nKeep-Alive:timeout=5, max=1000\n\n%s", httpStatus, RTString, strlen(message), compression_alg, message);
+			sprintf(httpResponse, "HTTP/1.1 %d %s\nDate: Mon, 27 Jul 2009 12:28:53 GMT\nServer: Apache/2.2.14 (Win32)\nLast-Modified: Wed, 22 Jul 2009 19:15:56 GMT\nContent-Length: %d\nContent-Type: %s\nContent-Encoding: %s\nConnection: keep-alive\nKeep-Alive:timeout=5, max=1000\n\n%s", httpStatus, RTString, strlen(message), contentType, compression_alg, message);
 		}
 	}
 	// puts(httpResponse);
