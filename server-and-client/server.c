@@ -229,9 +229,9 @@ int main(int argc, char *argv[])
 }
 
 void connection_handler(void* socket_desc) {
-	char buffer[4096]; 
+	char buffer[15000]; 
 	char actualpath[PATH_MAX + 1];
-	char HTTPResponse[4092];
+	char HTTPResponse[15000];
 	int client_sock = *(int*)socket_desc;
 	size_t bytesread;
 	int num_transactions = 0;
@@ -270,13 +270,6 @@ void connection_handler(void* socket_desc) {
 			char* requestType = strtok_r(NULL, " ", &main_save_ptr); // GET, POST, DELETE
 			char* path = strtok_r(NULL, " ", &main_save_ptr); // stores the path requested
 
-			// Getting the contentType here, not sure if this is the best way to do this...
- 			char* contentType = strtok_r(NULL, " ", &main_save_ptr);
- 			contentType = strtok_r(NULL, "\n", &main_save_ptr);
- 			printf("2: %s\n", contentType);
- 			// End getting content type
-
-
 			if (path == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
 			char* http_version = strtok_r(NULL, "\n", &main_save_ptr);
 			if (http_version == NULL) {spillover_offset = reconcile_fragmented_request(buffer, request_start); break;}
@@ -287,6 +280,7 @@ void connection_handler(void* socket_desc) {
 			int contentLength = 0;
 			bool is_persistent_connection = false;
 			char* compression_alg = NULL;
+			char* contentType;
 
 			// strtok_r can only use 1 char as a delimiter, so we have to use pointer 
 			// addition parse the request properly
@@ -310,6 +304,7 @@ void connection_handler(void* socket_desc) {
 					if ((strcmp(header_val+1, "keep-alive") == 0)) is_persistent_connection = true;
 				}
 				else if (strcmp(header_key, "Accept-Encoding") == 0) compression_alg = header_val+1; // need + 1 since there's a " " after colon
+				else if (strcmp(header_key, "Content-Type") == 0) contentType = header_val+1; // need + 1 since there's a " " after colon
 				curr_header = strtok_r(NULL, "\n", &main_save_ptr);
 			}
 			// finish fragmented buffer checks
@@ -319,6 +314,7 @@ void connection_handler(void* socket_desc) {
 			printf("main save ptr is %d, bytesread is %d, max index is %d\n", main_save_ptr, buffer+bytesread, (int) (buffer+sizeof(buffer)));
 			printf("first char is %c\n", *main_save_ptr);
 			printf("content length is %d\n", contentLength);
+			printf("content type is %s\n", contentType);
 			// seems to be able to copy an empty string into a size 0 char array successfully for GET requests?
 			char* requestBody[contentLength];
 			strncpy(requestBody, main_save_ptr, contentLength);
@@ -395,7 +391,7 @@ void connection_handler(void* socket_desc) {
 					createDirectories(relativePath);
 					getRealPath(relativePath, actualpath, requestType);
 
-					*(contentType + (strlen(contentType) - 1)) = '\0';
+					*(contentType + strlen(contentType)) = '\0';
  					puts(contentType);
  					char* fileExt = get(fileExtMap, contentType);
  					char actualPathWExt[strlen(actualpath) + strlen(fileExt)];
