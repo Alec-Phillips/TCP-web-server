@@ -1,5 +1,11 @@
 {
     "files.associations": {
-        "assert.h": "c"
+        "assert.h": "c",
+        "evp.h": "c",
+        "pem.h": "c",
+        "stdbool.h": "c",
+        "stdio.h": "c",
+        "string.h": "c",
+        "ssl.h": "c"
     }
 }

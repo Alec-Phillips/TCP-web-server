@@ -10,6 +10,18 @@
 #include <semaphore.h>
 #include <assert.h>
 #include <stdbool.h>
+// #include "../TLS-client/TLS.c"
+// #include "../TLS-client/TLS.h"
+#include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/bio.h>
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    SSL_library_init();
+    SSL_load_error_strings();
+#endif
 
 /* 
 	Note:
@@ -35,6 +47,7 @@ void getFileContents(char actualpath[], char fileContents[]);
 void createHTTPResponse(char *httpResponse, int httpStatus, char* message, bool is_persistent_connection);
 void requestTypeString(char* requestString, int httpStatus);
 char* replaceWord(const char* s, const char* oldW, const char* newW);
+SSL_CTX* get_context();
 
 
 // Here is our global array (eventually hashmap, hopefully)
@@ -188,6 +201,7 @@ int main(int argc, char *argv[])
 }
 
 void connection_handler(void* socket_desc) {
+	printf("START");
 	char buffer[100000]; 
 	char actualpath[PATH_MAX + 1];
 	char HTTPResponse[4092];
@@ -209,6 +223,80 @@ void connection_handler(void* socket_desc) {
    	FD_SET(client_sock, &masterfds);
 
 	memcpy(&readfds, &masterfds, sizeof(fd_set));
+	
+
+	// OPENSSL
+	printf("BEFORE INIT");
+	SSL_CTX* ctx = get_context();
+	BIO* sbio = BIO_new_ssl(ctx, client_sock);
+	SSL* ssl;
+	BIO_get_ssl(sbio, &ssl);
+	// BIO* rbio = BIO_new(BIO_s_mem());
+	// BIO* wbio = BIO_new(BIO_s_mem());
+	printf("BEFORE ACCEPT");
+	BIO* bbio = BIO_new(BIO_f_buffer());
+	sbio = BIO_push(bbio, sbio);
+	BIO* abio = BIO_new_accept("2000");
+	// SSL_set_bio(ssl, rbio, wbio);
+	// SSL_set_accept_state(ssl);
+
+	printf("PAST INITAL POINT");
+	BIO_set_accept_bios(abio,sbio);
+	BIO* out = BIO_new_fp(stdout, BIO_NOCLOSE);
+
+	// BIO_write(rbio, buffer, strlen(buffer));
+
+	// if(!SSL_is_init_finished(ssl)) {
+	// 	SSL_do_handshake(ssl);
+	// }
+
+	if(BIO_do_accept(abio) <= 0) {
+		printf("INITAL FAILED\n");
+	}
+
+	if(BIO_do_accept(abio) <= 0) {
+		printf("CONNECTION FAILED\n");
+	}
+
+	sbio = BIO_pop(abio);
+
+	BIO_free_all(abio);
+
+	if(BIO_do_handshake(sbio) <= 0) {
+		printf("HANDSHAKE FAILED.");
+	}
+
+
+	printf("PAST HANDSHAKE");
+	// BIO_puts(sbio, buffer);
+
+
+	BIO* bio = BIO_new_ssl(ctx, client_sock); 
+	BIO* accept_bio = BIO_new_accept("2000");
+	BIO_push(accept_bio, bio);
+
+	if(BIO_do_handshake(accept_bio) <= 0) {
+		printf("RIP");
+		// exit(1);
+	}
+
+	// if(SSL_stateless(ssl) <= 0) {
+	// 	printf("RIP");
+	// }
+
+	BIO_pop(accept_bio);
+
+	 
+	
+
+	
+
+
+
+	// OPENSSL ABOVE
+
+
+
 
 	// read, at max, the size of buffer many bytes from the socket buffer into the userspace buffer
 	// combine first request we're gonna parse with the leftover request of last read() cycle (is there's something to work with)
@@ -223,7 +311,11 @@ void connection_handler(void* socket_desc) {
 			printf("entering nested while loop\n");
 			printf("first char is %c\n", *(main_save_ptr));
 			// Send the message back to client
+			// BIO_gets(sbio, buffer, strlen(buffer));
 			printf("REQUEST IS:\n%s\n", main_save_ptr);
+			
+			// BIO_write(out, buffer, strlen(buffer));
+			// BIO_write(sbio, buffer, strlen(buffer));
 			// extract header values from request
 			
 			char* requestType = strtok_r(NULL, " ", &main_save_ptr); // GET, POST, DELETE
@@ -556,4 +648,20 @@ char* replaceWord(const char* s, const char* oldW,
   
     result[i] = '\0';
     return result;
+}
+
+SSL_CTX* get_context() {
+    SSL_CTX* ctx = SSL_CTX_new(SSLv23_server_method());
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    // SSL_CTX_set_min_proto_version(ctx.get(), TLS1_2_VERSION);
+    if(SSL_CTX_use_certificate_file(ctx, "../TLS-client/server-certificate.pem", SSL_FILETYPE_PEM) <= 0) {
+        printf("Couldn't load certificate.");
+        exit(EXIT_FAILURE);
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctx, "../TLS-client/server-private-key.pem", SSL_FILETYPE_PEM) <= 0) {
+        printf("Couldn't get private key.");
+        exit(EXIT_FAILURE);
+    }
+    return ctx;
+    // SSL_CTX_use_certificate
 }
