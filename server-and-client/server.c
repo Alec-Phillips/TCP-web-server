@@ -369,7 +369,7 @@ void connection_handler(void* socket_desc) {
 							else {
 								if (compression_alg != NULL) {
 									printf("starting\n");
-									int srcLen = strlen(fileContents)+1;      // +1 for the trailing `\0`
+									int srcLen = strlen(fileContents);
 									int destLen = compressBound(srcLen); // this is how you should estimate size needed for the buffer
 									printf("lengths calculated\n");
 																
